@@ -3,7 +3,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$DIR"
 
 echo "=========================================================="
-echo "      🏗️ COMPILADOR ECOWAVE PRO v1.4.3 (MACOS)"
+echo "      🏗️ COMPILADOR ECOWAVE PRO v1.4.4 (MACOS)"
 echo "=========================================================="
 
 echo "1. Limpando pastas antigas para evitar erros de cache..."
@@ -15,7 +15,7 @@ source venv/bin/activate
 
 echo "3. Instalando dependências oficiais..."
 pip install --upgrade pip
-pip install openpyxl pillow pillow-heif pymupdf pyinstaller customtkinter darkdetect
+pip install openpyxl pillow pillow-heif pymupdf pyinstaller customtkinter darkdetect pdf2docx pdfplumber reportlab
 
 # Preparar ícone em alta resolução (Garante que fique nítido no Mac)
 echo "4. Preparando ícone de alta resolução..."
@@ -36,12 +36,12 @@ fi
 
 echo "6. Finalizando e criando pacote Zip Seguro (-ry)..."
 cd dist
-zip -ry ../EcoRenamer_Mac_v1.4.3.zip RenomeadorApp.app
+zip -ry ../EcoRenamer_Mac_v1.4.4.zip RenomeadorApp.app
 cd ..
 
 echo "--------------------------------------------------------"
 echo "✅ SUCESSO ABSOLUTO!"
-echo "O arquivo pronto para o GitHub é: EcoRenamer_Mac_v1.4.3.zip"
+echo "O arquivo pronto para o GitHub é: EcoRenamer_Mac_v1.4.4.zip"
 echo "O aplicativo para uso direto está em: dist/RenomeadorApp.app"
 echo "--------------------------------------------------------"
 deactivate

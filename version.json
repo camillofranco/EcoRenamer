@@ -1,6 +1,6 @@
 {
-    "version": "1.4.3",
-    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.3/EcoRenamer_Win_v1.4.3.zip",
-    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.3/EcoRenamer_Mac_v1.4.3.zip",
-    "changelog": "v1.4.3\n- HOTFIX DE SEGURANCA MAXIMA.\n- Corrigido um bug critico no instalador do macOS que permitia delecao de pastas fora do dominio do App.\n- Implementado sistema Guardian que so substitui arquivos se o alvo for estritamente um pacote '.app'.\n- Todos os metodos de delecao no instalador foram desabilitados por design."
+    "version": "1.4.4",
+    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.4/EcoRenamer_Win_v1.4.4.zip",
+    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.4/EcoRenamer_Mac_v1.4.4.zip",
+    "changelog": "v1.4.4\n- NOVA CAIXA DE FERRAMENTAS!\n- Adicionadas conversoes avancadas: PDF para Word, Excel para PDF, PDF para Excel e Imagens consolidadas.\n- Novo cortador de paginas inteligente direto do PyMuPDF.\n- Melhoria de multithreading para garantir interface super fluida.\n- Update automatico aprimorado."
 }

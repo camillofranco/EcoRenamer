@@ -16,6 +16,11 @@ import json
 import urllib.request
 import sys
 from concurrent.futures import ThreadPoolExecutor
+import pdfplumber
+from pdf2docx import Converter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import landscape, A4
 
 VERSION = "1.4.4" # Warning amigável para Errno 89 (Nuvem)
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
@@ -96,9 +101,11 @@ class ToolApp:
         
         self.tabview.add("📸  GESTÃO DE IMAGENS")
         self.tabview.add("📄  GESTÃO DE PDFS")
+        self.tabview.add("🛠️ UTILITÁRIOS")
         
         self.create_img_tab(self.tabview.tab("📸  GESTÃO DE IMAGENS"))
         self.create_pdf_tab(self.tabview.tab("📄  GESTÃO DE PDFS"))
+        self.create_utils_tab(self.tabview.tab("🛠️ UTILITÁRIOS"))
         
         # 3. BARRA DE STATUS INFERIOR
         self.status_bar = ctk.CTkFrame(self.root, height=40, corner_radius=0, fg_color=("gray90", "gray15"))
@@ -228,6 +235,148 @@ class ToolApp:
         
         ctk.CTkButton(parent, text="UNIFICAR E COMPRIMIR PDFs", command=self.merge_pdfs,
                       fg_color=self.c_primary, text_color="white", font=ctk.CTkFont(size=16, weight="bold"), height=60, corner_radius=8).grid(row=1, column=0, pady=40, sticky="ew")
+
+    def create_utils_tab(self, parent):
+        parent.columnconfigure(0, weight=1)
+        parent.columnconfigure(1, weight=1)
+        
+        lbl = ctk.CTkLabel(parent, text="CAIXA DE FERRAMENTAS AVANÇADAS", font=ctk.CTkFont(size=20, weight="bold"), text_color=self.c_primary)
+        lbl.grid(row=0, column=0, columnspan=2, pady=(20, 30))
+        
+        def wrapper(func):
+            def _inner():
+                threading.Thread(target=func, daemon=True).start()
+            return _inner
+            
+        def build_card(col, row, icon, title, desc, btn_text, command_func):
+            frame = ctk.CTkFrame(parent, corner_radius=15, fg_color="transparent", border_width=2, border_color="gray80")
+            frame.grid(row=row, column=col, padx=15, pady=15, sticky="ew")
+            
+            ctk.CTkLabel(frame, text=icon, font=ctk.CTkFont(size=36)).pack(pady=(15,0))
+            ctk.CTkLabel(frame, text=title, font=ctk.CTkFont(size=16, weight="bold")).pack(pady=5)
+            ctk.CTkLabel(frame, text=desc, font=ctk.CTkFont(size=12), text_color="gray", wraplength=300, justify="center").pack(pady=(0,15), padx=10)
+            
+            btn = ctk.CTkButton(frame, text=btn_text, command=wrapper(command_func), 
+                                fg_color=self.c_secondary, hover_color="#311B92", font=ctk.CTkFont(weight="bold"))
+            btn.pack(pady=(0, 20), padx=20, fill="x")
+            return frame
+
+        build_card(0, 1, "🔤", "PDF para Word", "Transforme documentos PDF em texto editável .docx nativo do Word.", "Converter PDF -> Word", self.do_pdf_to_word)
+        build_card(1, 1, "📊", "Excel para PDF", "Transforme tabelas do Excel em relatórios limpos no formato PDF.", "Converter Excel -> PDF", self.do_excel_to_pdf)
+        build_card(0, 2, "📑", "PDF para Excel", "Extraia tabelas brutas de um arquivo PDF e salve no formato Excel.", "Extrair para Excel", self.do_pdf_to_excel)
+        build_card(1, 2, "🖼️", "JPG para PDF", "Selecione múltiplas fotos (JPG/PNG) para unir num arquivo PDF.", "Unir Fotos em PDF", self.do_jpg_to_pdf)
+        build_card(0, 3, "✂️", "Dividir PDF", "Separe as páginas de um PDF denso em arquivos independentes.", "Separar Páginas", self.do_split_pdf)
+
+    def _show_info(self, title, msg):
+        self.root.after(0, lambda: messagebox.showinfo(title, msg))
+
+    def _show_err(self, title, msg):
+        self.root.after(0, lambda: messagebox.showerror(title, msg))
+
+    def do_pdf_to_word(self):
+        file = filedialog.askopenfilename(title="Selecione o PDF", filetypes=[("PDF files", "*.pdf")])
+        if not file: return
+        out = os.path.splitext(file)[0] + ".docx"
+        try:
+            cv = Converter(file)
+            cv.convert(out)
+            cv.close()
+            self._show_info("Sucesso", f"Documento Word salvo em:\n{out}")
+        except Exception as e:
+            self._show_err("Erro", f"Falha na conversão PDF -> Word:\n{e}")
+
+    def do_excel_to_pdf(self):
+        file = filedialog.askopenfilename(title="Selecione o Excel", filetypes=[("Excel files", "*.xlsx")])
+        if not file: return
+        out = os.path.splitext(file)[0] + ".pdf"
+        try:
+            wb = openpyxl.load_workbook(file, data_only=True)
+            sheet = wb.active
+            data = []
+            for row in sheet.iter_rows(values_only=True):
+                data.append([str(c) if c is not None else "" for c in row])
+            if not data:
+                self._show_err("Erro", "Planilha Excel parece estar vazia.")
+                return
+            
+            pdf = SimpleDocTemplate(out, pagesize=landscape(A4))
+            table = Table(data)
+            style = TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor(self.c_primary)),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0,0), (-1,0), 12),
+                ('BOTTOMPADDING', (0,0), (-1,0), 12),
+                ('BACKGROUND', (0,1), (-1,-1), colors.white),
+                ('GRID', (0,0), (-1,-1), 1, colors.black),
+                ('FONTNAME', (0,1), (-1,-1), 'Helvetica'),
+                ('FONTSIZE', (0,1), (-1,-1), 10),
+            ])
+            table.setStyle(style)
+            pdf.build([table])
+            self._show_info("Sucesso", f"Relatório PDF salvo em:\n{out}")
+        except Exception as e:
+            self._show_err("Erro", f"Falha ao gerar PDF:\n{e}")
+
+    def do_pdf_to_excel(self):
+        file = filedialog.askopenfilename(title="Selecione o PDF", filetypes=[("PDF files", "*.pdf")])
+        if not file: return
+        out = os.path.splitext(file)[0] + "_Extraido.xlsx"
+        try:
+            wb = openpyxl.Workbook()
+            sheet = wb.active
+            with pdfplumber.open(file) as pdf:
+                for page in pdf.pages:
+                    table = page.extract_table()
+                    if table:
+                        for row in table:
+                            sheet.append([str(c) if c is not None else "" for c in row])
+            wb.save(out)
+            self._show_info("Sucesso", f"Tabelas extraídas salvas em:\n{out}")
+        except Exception as e:
+            self._show_err("Erro", f"Extratura de tabela falhou:\n{e}")
+
+    def do_jpg_to_pdf(self):
+        files = filedialog.askopenfilenames(title="Selecione Múltiplas Imagens (Ordem Final)", filetypes=[("Images", "*.jpg;*.jpeg;*.png")])
+        if not files: return
+        try:
+            # Pega o mesmo diretório da primeira imagem e cria um PDF genérico lá.
+            out = os.path.join(os.path.dirname(files[0]), "Album_Unificado.pdf")
+            images = []
+            for f in files:
+                img = Image.open(f)
+                img = img.convert("RGB")
+                img = ImageOps.exif_transpose(img)
+                images.append(img)
+            
+            if images:
+                images[0].save(out, save_all=True, append_images=images[1:], resolution=100.0)
+                self._show_info("Sucesso", f"Álbum fotográfico em PDF salvo em:\n{out}")
+            for img in images:
+                img.close()
+        except Exception as e:
+            self._show_err("Erro", f"Falha ao unir as imagens:\n{e}")
+
+    def do_split_pdf(self):
+        file = filedialog.askopenfilename(title="Selecione o PDF", filetypes=[("PDF files", "*.pdf")])
+        if not file: return
+        try:
+            base_nome = os.path.splitext(os.path.basename(file))[0]
+            folder = os.path.dirname(file)
+            doc = fitz.open(file)
+            qtd = 0
+            for i in range(len(doc)):
+                novo_doc = fitz.open()
+                novo_doc.insert_pdf(doc, from_page=i, to_page=i)
+                novo_out = os.path.join(folder, f"{base_nome}_Pagina_{i+1}.pdf")
+                novo_doc.save(novo_out, deflate=True)
+                novo_doc.close()
+                qtd += 1
+            doc.close()
+            self._show_info("Sucesso", f"{qtd} páginas foram extraídas com sucesso como PDFs independentes na mesma pasta!")
+        except Exception as e:
+            self._show_err("Erro", f"Erro no Split:\n{e}")
 
     # ------------------ DRAG & DROP ------------------
     def on_drag_start(self, event):
