@@ -1,0 +1,574 @@
+import os
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
+from tkinter.ttk import Treeview
+import openpyxl
+from PIL import Image, ImageOps
+import fitz  # PyMuPDF para juntar PDFs
+import threading
+import math
+
+# Suporte cross-platform para .HEIC (iPhone)
+try:
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+except ImportError:
+    pass # Falha silenciosa caso nao exista, ignora HEIC mas salva o resto
+
+class ToolApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Ferramentas Múltiplas: Imagens & PDFs")
+        self.root.geometry("850x700")
+        
+        # Variáveis Imagens
+        self.img_folder = tk.StringVar()
+        self.excel_file = tk.StringVar()
+        self.digits = tk.IntVar(value=2)
+        self.start_number = tk.IntVar(value=1)
+        self.compress_var = tk.BooleanVar(value=True)
+        self.sort_order = tk.StringVar(value="Decrescente (Z-A)")
+        self.mapping = []
+        
+        # Variáveis PDF
+        self.pdf_folder = tk.StringVar()
+        self.pdf_output_name = tk.StringVar(value="Documento_Unificado.pdf")
+        self.pdf_sort_order = tk.StringVar(value="Crescente (A-Z)")
+        
+        # Variáveis de Interface
+        self.processing = False
+        
+        self.create_widgets()
+        
+    def create_widgets(self):
+        notebook = ttk.Notebook(self.root)
+        notebook.pack(fill="both", expand=True)
+        
+        frame_img = ttk.Frame(notebook)
+        notebook.add(frame_img, text="📸 Imagens (Renomear e Comprimir)")
+        
+        frame_pdf = ttk.Frame(notebook)
+        notebook.add(frame_pdf, text="📄 PDFs (Juntar e Comprimir)")
+        
+        self.create_img_widgets(frame_img)
+        self.create_pdf_widgets(frame_pdf)
+
+    def create_img_widgets(self, parent):
+        parent.columnconfigure(0, weight=1)
+        parent.rowconfigure(2, weight=1)
+        
+        frame_top = ttk.Frame(parent, padding="15")
+        frame_top.grid(row=0, column=0, sticky="ew")
+        frame_top.columnconfigure(1, weight=1)
+        
+        ttk.Label(frame_top, text="Pasta de Imagens:", font=("", 12)).grid(row=0, column=0, sticky="w", pady=8)
+        ttk.Entry(frame_top, textvariable=self.img_folder, state="readonly", font=("", 12)).grid(row=0, column=1, sticky="ew", padx=10, pady=8)
+        ttk.Button(frame_top, text="Procurar...", command=self.select_img_folder).grid(row=0, column=2, pady=8)
+        
+        ttk.Label(frame_top, text="Planilha Excel (Opcional):", font=("", 12)).grid(row=1, column=0, sticky="w", pady=8)
+        ttk.Entry(frame_top, textvariable=self.excel_file, state="readonly", font=("", 12)).grid(row=1, column=1, sticky="ew", padx=10, pady=8)
+        
+        frame_botoes_excel = ttk.Frame(frame_top)
+        frame_botoes_excel.grid(row=1, column=2, sticky="ew")
+        ttk.Button(frame_botoes_excel, text="Procurar", command=self.select_excel, width=9).pack(side="left", padx=2)
+        ttk.Button(frame_botoes_excel, text="Limpar", command=lambda: self.excel_file.set(""), width=7).pack(side="left")
+        
+        frame_configs = ttk.Frame(frame_top)
+        frame_configs.grid(row=2, column=0, columnspan=3, sticky="ew", pady=8)
+        
+        ttk.Label(frame_configs, text="Dígitos (ex: 2 = 01):", font=("", 12)).pack(side="left")
+        ttk.Spinbox(frame_configs, from_=1, to=10, textvariable=self.digits, width=4, font=("", 12)).pack(side="left", padx=(5, 15))
+        
+        ttk.Label(frame_configs, text="Nº Inicial (sem Excel):", font=("", 12)).pack(side="left")
+        ttk.Spinbox(frame_configs, from_=1, to=99999, textvariable=self.start_number, width=6, font=("", 12)).pack(side="left", padx=(5, 15))
+        
+        ttk.Label(frame_configs, text="(Deixe o Excel em branco para usar nº em sequência!)", font=("", 10, "italic"), foreground="gray").pack(side="left")
+        
+        ttk.Label(frame_top, text="Ordem Temporária:", font=("", 12)).grid(row=3, column=0, sticky="w", pady=8)
+        opcoes_ordem = ["Decrescente (Z-A)", "Crescente (A-Z)"]
+        cb_ordem = ttk.Combobox(frame_top, textvariable=self.sort_order, values=opcoes_ordem, state="readonly", font=("", 12), width=18)
+        cb_ordem.grid(row=3, column=1, sticky="w", padx=10, pady=8)
+        
+        ttk.Checkbutton(frame_top, text="Comprimir Fotos (Funciona p/ Windows e Mac)", variable=self.compress_var).grid(row=4, column=0, columnspan=2, sticky="w", pady=8)
+        
+        btn_load = ttk.Button(frame_top, text="1. Carregar Prévia do Mapeamento", command=self.load_data)
+        btn_load.grid(row=5, column=0, columnspan=3, pady=15, sticky="ew")
+        
+        frame_mid = ttk.Frame(parent, padding="15")
+        frame_mid.grid(row=1, column=0, sticky="nsew")
+        parent.rowconfigure(1, weight=1)
+        frame_mid.columnconfigure(0, weight=1)
+        frame_mid.rowconfigure(0, weight=1)
+        
+        columns = ("pos", "orig", "novo", "tam_orig", "tam_est")
+        self.tree = Treeview(frame_mid, columns=columns, show="headings", selectmode="browse")
+        self.tree.heading("pos", text="Posição")
+        self.tree.heading("orig", text="Nome Original")
+        self.tree.heading("novo", text="Novo Nome Final")
+        self.tree.heading("tam_orig", text="Tam. Original")
+        self.tree.heading("tam_est", text="Tam. Est. (KB)")
+        
+        self.tree.column("pos", width=60, anchor="center")
+        self.tree.column("orig", width=250, anchor="w")
+        self.tree.column("novo", width=250, anchor="w")
+        self.tree.column("tam_orig", width=100, anchor="center")
+        self.tree.column("tam_est", width=100, anchor="center")
+        
+        scrollbar = ttk.Scrollbar(frame_mid, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscroll=scrollbar.set)
+        
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        
+        # Bindings para Drag and Drop
+        self.tree.bind("<ButtonPress-1>", self.on_drag_start)
+        self.tree.bind("<B1-Motion>", self.on_drag_motion)
+        self.tree.bind("<ButtonRelease-1>", self.on_drag_drop)
+        self.drag_data = {"item": None}
+        
+        frame_bot = ttk.Frame(parent, padding="15")
+        frame_bot.grid(row=2, column=0, sticky="ew")
+        frame_bot.columnconfigure(0, weight=1)
+        
+        self.btn_rename = ttk.Button(frame_bot, text="2. Renomear Arquivos", command=self.rename_files, state="disabled")
+        self.btn_rename.grid(row=0, column=0, pady=5, sticky="ew")
+        
+        self.progress = ttk.Progressbar(frame_bot, orient="horizontal", length=100, mode="determinate")
+        self.progress.grid(row=1, column=0, pady=5, sticky="ew")
+        self.progress.grid_remove() # Oculto inicialmente
+
+    def create_pdf_widgets(self, parent):
+        parent.columnconfigure(0, weight=1)
+        
+        frame_top = ttk.Frame(parent, padding="15")
+        frame_top.grid(row=0, column=0, sticky="ew")
+        frame_top.columnconfigure(1, weight=1)
+        
+        ttk.Label(frame_top, text="Pasta com PDFs:", font=("", 12)).grid(row=0, column=0, sticky="w", pady=8)
+        ttk.Entry(frame_top, textvariable=self.pdf_folder, state="readonly", font=("", 12)).grid(row=0, column=1, sticky="ew", padx=10, pady=8)
+        ttk.Button(frame_top, text="Procurar...", command=self.select_pdf_folder).grid(row=0, column=2, pady=8)
+        
+        ttk.Label(frame_top, text="Nome do Arquivo Final:", font=("", 12)).grid(row=1, column=0, sticky="w", pady=8)
+        ttk.Entry(frame_top, textvariable=self.pdf_output_name, font=("", 12)).grid(row=1, column=1, sticky="ew", padx=10, pady=8)
+        
+        ttk.Label(frame_top, text="Ordem de Leitura:", font=("", 12)).grid(row=2, column=0, sticky="w", pady=8)
+        opcoes_ordem_pdf = ["Crescente (A-Z)", "Decrescente (Z-A)"]
+        cb_ordem_pdf = ttk.Combobox(frame_top, textvariable=self.pdf_sort_order, values=opcoes_ordem_pdf, state="readonly", font=("", 12), width=18)
+        cb_ordem_pdf.grid(row=2, column=1, sticky="w", padx=10, pady=8)
+        
+        btn_merge = ttk.Button(parent, text="Juntar e Comprimir todos os PDFs", command=self.merge_pdfs)
+        btn_merge.grid(row=1, column=0, pady=30, padx=20, sticky="ew", ipady=10)
+        
+        # Informativo
+        info_text = ("Selecione uma pasta que tenha os seus documentos em PDF.\n"
+                     "Eles serão lidos na ordem escolhida, unificados num único arquivo\n"
+                     "e comprimidos automaticamente (livrando-se de dados ocultos inúteis do PDF).")
+        ttk.Label(parent, text=info_text, justify="center", font=("", 11, "italic")).grid(row=2, column=0, pady=20)
+
+    # ------------------ UTILITÁRIOS ------------------
+    def format_size(self, size_bytes):
+        if size_bytes >= 1024 * 1024:
+            return f"{size_bytes / (1024 * 1024):.2f} MB"
+        else:
+            return f"{size_bytes / 1024:.0f} KB"
+
+    # ------------------ DRAG & DROP ------------------
+    def on_drag_start(self, event):
+        item = self.tree.identify_row(event.y)
+        if item:
+            self.drag_data["item"] = item
+
+    def on_drag_motion(self, event):
+        pass # Poderia adicionar um indicador visual aqui
+
+    def on_drag_drop(self, event):
+        if not self.drag_data["item"]:
+            return
+            
+        target_item = self.tree.identify_row(event.y)
+        source_item = self.drag_data["item"]
+        
+        if target_item and target_item != source_item:
+            # Pegar indices reais no mapping
+            source_idx = self.tree.index(source_item)
+            target_idx = self.tree.index(target_item)
+            
+            # Reordenar self.mapping
+            moved_item = self.mapping.pop(source_idx)
+            self.mapping.insert(target_idx, moved_item)
+            
+            # Recalcular nomes e atualizar Treeview
+            self.update_mapping_after_reorder()
+            
+        self.drag_data["item"] = None
+
+    def update_mapping_after_reorder(self):
+        # Se temos Excel, precisamos manter os nomes vindos do excel na ordem da tabela
+        # No load_data original, associamos a imagem [i] ao excel [i].
+        # Se o usuário arrasta a imagem, ele quer que AQUELA imagem receba o nome que está naquela posição.
+        # OU ele quer arrastar a linha inteira (imagem + nome)? 
+        # Geralmente em vistoria, o usuário quer mudar a ORDEM das fotos para bater com a ordem do relatório.
+        # Então a imagem muda de posição, mas o "Novo Nome" segue a sequência (1, 2, 3...).
+        
+        excel_path = self.excel_file.get()
+        excel_names = []
+        
+        if excel_path:
+            # Precisamos extrair novamente a lista de nomes do excel para reatribuir
+            # Para simplificar, vou assumir que o usuário quer que a ordem do excel seja SOBERANA às posições.
+            # Mas se ele arrastou, ele quer trocar a foto de "lugar" no excel.
+            # Então pegamos os 'new_name' atuais na ordem original e reatribuímos? 
+            # Não, vamos salvar os nomes destino originais antes de reordenar o mapping se necessário.
+            pass
+            
+        # Refazer a lógica de nomes baseada na nova ordem de self.mapping
+        digitos = self.digits.get()
+        start_no = self.start_number.get()
+        
+        # Se não tem excel, é só sequência. Se tem, a coluna "IMG" manda.
+        # No load_data, pegamos a lista de valores da coluna IMG.
+        # Vamos recuperar essa lista de valores para reatribuir.
+        
+        img_values = []
+        if excel_path:
+            try:
+                wb = openpyxl.load_workbook(excel_path, data_only=True)
+                sheet = wb.active
+                img_col_idx = None
+                for col_idx in range(1, sheet.max_column + 1):
+                    val = sheet.cell(row=1, column=col_idx).value
+                    if val and str(val).strip().upper() == "IMG":
+                        img_col_idx = col_idx
+                        break
+                if img_col_idx:
+                    for row_idx in range(2, sheet.max_row + 1):
+                        if row_idx in sheet.row_dimensions and sheet.row_dimensions[row_idx].hidden: continue
+                        val = sheet.cell(row=row_idx, column=img_col_idx).value
+                        if val is not None: img_values.append(val)
+            except: pass
+        else:
+            img_values = [str(start_no + i) for i in range(len(self.mapping))]
+
+        for i, item in enumerate(self.mapping):
+            if i < len(img_values):
+                img_val_str = str(img_values[i]).strip()
+                if img_val_str.endswith(".0"): img_val_str = img_val_str[:-2]
+                
+                if img_val_str.isdigit():
+                    novo_base = img_val_str.zfill(digitos)
+                else:
+                    novo_base = img_val_str
+                
+                _, ext = os.path.splitext(item['orig_name'])
+                if self.compress_var.get():
+                    item['new_name'] = f"{novo_base}.JPG"
+                else:
+                    item['new_name'] = f"{novo_base}{ext.upper()}"
+                
+                folder = self.img_folder.get()
+                item['new_path'] = os.path.join(folder, item['new_name'])
+
+        # Atualizar Treeview
+        for item_id in self.tree.get_children():
+            self.tree.delete(item_id)
+            
+        for idx, item in enumerate(self.mapping):
+            self.tree.insert("", "end", values=(idx + 1, item['orig_name'], item['new_name'], item['size_orig_str'], item['size_est_str']))
+
+    # ------------------ LÓGICA IMAGENS ------------------
+    def select_img_folder(self):
+        folder = filedialog.askdirectory(title="Selecione a pasta com as fotos")
+        if folder:
+            self.img_folder.set(folder)
+            self.reset_preview()
+
+    def select_excel(self):
+        file = filedialog.askopenfilename(title="Selecione o arquivo Excel", filetypes=[("Excel files", "*.xlsx")])
+        if file:
+            self.excel_file.set(file)
+            self.reset_preview()
+
+    def reset_preview(self):
+        self.mapping = []
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        self.btn_rename.config(state="disabled")
+
+    def load_data(self):
+        folder = self.img_folder.get()
+        excel_path = self.excel_file.get()
+        
+        if not folder:
+            messagebox.showwarning("Aviso", "Por favor, selecione a pasta de imagens.")
+            return
+
+        valid_exts = {".jpg", ".jpeg", ".png", ".heic"}
+        try:
+            arquivos = os.listdir(folder)
+            images = [f for f in arquivos if not f.startswith('.') and os.path.splitext(f)[1].lower() in valid_exts]
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao acessar a pasta selecionada:\n{e}")
+            return
+            
+        if not images:
+            messagebox.showwarning("Aviso", "Nenhuma imagem válida encontrada na pasta selecionada.")
+            return
+            
+        ordem = self.sort_order.get()
+        if "Decrescente" in ordem:
+            images.sort(reverse=True)
+            self.tree.heading("orig", text="Nome Original (Decrescente)")
+        else:
+            images.sort(reverse=False)
+            self.tree.heading("orig", text="Nome Original (Crescente)")
+        
+        excel_img_values = []
+        if excel_path:
+            try:
+                wb = openpyxl.load_workbook(excel_path, data_only=True)
+                sheet = wb.active
+                
+                img_col_idx = None
+                for col_idx in range(1, sheet.max_column + 1):
+                    cell_value = sheet.cell(row=1, column=col_idx).value
+                    if cell_value and str(cell_value).strip().upper() == "IMG":
+                        img_col_idx = col_idx
+                        break
+                        
+                if img_col_idx is None:
+                    messagebox.showerror("Erro", "Coluna 'IMG' não encontrada na primeira linha do Excel.")
+                    return
+                    
+                for row_idx in range(2, sheet.max_row + 1):
+                    if row_idx in sheet.row_dimensions and sheet.row_dimensions[row_idx].hidden:
+                        continue
+                    val = sheet.cell(row=row_idx, column=img_col_idx).value
+                    if val is not None:
+                        excel_img_values.append(val)
+                        
+            except Exception as e:
+                messagebox.showerror("Erro", f"Erro ao abrir o arquivo Excel:\n{e}")
+                return
+                
+            if not excel_img_values:
+                messagebox.showwarning("Aviso", "Nenhum valor encontrado na coluna 'IMG' nas linhas visíveis.")
+                return
+                
+            if len(images) != len(excel_img_values):
+                msg = f"A quantidade de imagens ({len(images)}) difere do Excel ({len(excel_img_values)})."
+                messagebox.showwarning("Incompatibilidade", msg)
+                
+            qtd_pares = min(len(images), len(excel_img_values))
+        else:
+            qtd_pares = len(images)
+            start_no = self.start_number.get()
+            excel_img_values = [str(start_no + i) for i in range(qtd_pares)]
+            
+        self.mapping = []
+        digitos = self.digits.get()
+        seen_targets = set()
+        duplicados = set()
+        
+        for i in range(qtd_pares):
+            orig_name = images[i]
+            img_val = excel_img_values[i]
+            
+            img_val_str = str(img_val).strip()
+            if img_val_str.endswith(".0"):
+                img_val_str = img_val_str[:-2]
+                
+            if img_val_str.isdigit():
+                novo_base = img_val_str.zfill(digitos)
+            else:
+                novo_base = img_val_str
+                
+            _, ext = os.path.splitext(orig_name)
+            if self.compress_var.get():
+                novo_nome = f"{novo_base}.JPG"
+            else:
+                novo_nome = f"{novo_base}{ext.upper()}"
+            
+            if novo_nome in seen_targets:
+                duplicados.add(novo_nome)
+            seen_targets.add(novo_nome)
+            
+            orig_path = os.path.join(folder, orig_name)
+            novo_path = os.path.join(folder, novo_nome)
+            
+            self.mapping.append({
+                'orig_name': orig_name,
+                'new_name': novo_nome,
+                'orig_path': orig_path,
+                'new_path': novo_path
+            })
+            
+        if duplicados:
+            msg_dup = f"ATENÇÃO: Este mapeamento criará arquivos nomes idênticos: {', '.join(list(duplicados)[:5])}"
+            messagebox.showwarning("Conflito de Nomes", msg_dup)
+            
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+            
+        for idx, item in enumerate(self.mapping):
+            size_orig = os.path.getsize(item['orig_path'])
+            item['size_orig_str'] = self.format_size(size_orig)
+            
+            # Estimativa: largura 800px x 45% qualidade costuma ficar entre 40 e 90KB
+            # Usaremos 70KB como média segura para exibição
+            item['size_est_str'] = "70 KB" 
+            
+            self.tree.insert("", "end", values=(idx + 1, item['orig_name'], item['new_name'], item['size_orig_str'], item['size_est_str']))
+            
+        if self.mapping:
+            self.btn_rename.config(state="normal")
+            
+    def rename_files(self):
+        if not self.mapping or self.processing:
+            return
+            
+        resposta = messagebox.askyesno("Confirmar", f"Deseja renomear {len(self.mapping)} arquivos?")
+        if not resposta:
+            return
+            
+        self.processing = True
+        self.btn_rename.config(state="disabled")
+        self.progress.grid() # Mostra barra
+        self.progress['value'] = 0
+        self.progress['maximum'] = len(self.mapping)
+        
+        # Inicia thread para nao travar a interface
+        threading.Thread(target=self.run_rename_task, daemon=True).start()
+
+    def run_rename_task(self):
+        sucessos = 0
+        falhas = 0
+        erros_msg = []
+        
+        for idx, item in enumerate(self.mapping):
+            if os.path.exists(item['new_path']) and item['orig_path'] != item['new_path']:
+                erros_msg.append(f"{item['orig_name']} -> O destino {item['new_name']} já existe.")
+                falhas += 1
+            else:
+                try:
+                    if self.compress_var.get():
+                        img = Image.open(item['orig_path'])
+                        img = ImageOps.exif_transpose(img) # auto-girar corretamente foto
+                        img.thumbnail((800, 800), Image.Resampling.LANCZOS)
+                        img = img.convert("RGB")
+                        
+                        if item['orig_path'] == item['new_path']:
+                            temp_path = item['orig_path'] + "_temp.jpg"
+                            img.save(temp_path, "JPEG", optimize=True, quality=45)
+                            img.close()
+                            os.remove(item['orig_path'])
+                            os.rename(temp_path, item['new_path'])
+                        else:
+                            img.save(item['new_path'], "JPEG", optimize=True, quality=45)
+                            img.close()
+                            os.remove(item['orig_path'])
+                        sucessos += 1
+                    else:
+                        if item['orig_path'] != item['new_path']:
+                            os.rename(item['orig_path'], item['new_path'])
+                        sucessos += 1
+                except Exception as e:
+                    erros_msg.append(f"{item['orig_name']}: {str(e)}")
+                    falhas += 1
+            
+            # Atualiza progresso na interface via root.after
+            self.root.after(0, lambda v=idx+1: self.progress.configure(value=v))
+
+        # Finaliza na interface
+        self.root.after(0, lambda: self.finish_rename(sucessos, falhas, erros_msg))
+
+    def finish_rename(self, sucessos, falhas, erros_msg):
+        msg = f"Processo concluído!\nSucesso: {sucessos}\nFalhas: {falhas}"
+        if falhas > 0:
+            msg += f"\n\nErros (máximo 5):\n" + "\n".join(erros_msg[:5])
+            messagebox.showwarning("Aviso", msg)
+        else:
+            messagebox.showinfo("Sucesso", msg)
+        
+        self.processing = False
+        self.progress.grid_remove() # Esconde barra
+        self.reset_preview()
+
+    # ------------------ LÓGICA PDFs ------------------
+    def select_pdf_folder(self):
+        folder = filedialog.askdirectory(title="Selecione a pasta com os PDFs")
+        if folder:
+            self.pdf_folder.set(folder)
+
+    def merge_pdfs(self):
+        folder = self.pdf_folder.get()
+        if not folder:
+            messagebox.showwarning("Aviso", "Selecione a pasta com os PDFs primeiro!")
+            return
+            
+        try:
+            arquivos = os.listdir(folder)
+            pdfs = [f for f in arquivos if not f.startswith('.') and f.lower().endswith('.pdf')]
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao acessar a pasta selecionada:\n{e}")
+            return
+            
+        if not pdfs:
+            messagebox.showwarning("Aviso", "Nenhum PDF encontrado na pasta selecionada.")
+            return
+            
+        ordem = self.pdf_sort_order.get()
+        if "Decrescente" in ordem:
+            pdfs.sort(reverse=True)
+        else:
+            pdfs.sort(reverse=False) # Ordem padrão pra PDF costuma ser página 1 primeiro, então crescente
+            
+        output_name = self.pdf_output_name.get().strip()
+        if not output_name:
+            output_name = "Documento_Unificado.pdf"
+            
+        if not output_name.lower().endswith(".pdf"):
+            output_name += ".pdf"
+            
+        output_path = os.path.join(folder, output_name)
+        
+        # Evitar loop infinito se o arquivo q estamos querendo gerar já estiver na pasta e na lista
+        if output_name in pdfs:
+            pdfs.remove(output_name)
+            
+        if not pdfs:
+            messagebox.showwarning("Aviso", "Nenhum PDF para processar (além do próprio arquivo final já existente).")
+            return
+            
+        try:
+            # Cria doc PDF em branco
+            doc_final = fitz.open() 
+            
+            for pdf_file in pdfs:
+                pdf_path = os.path.join(folder, pdf_file)
+                try:
+                    doc_temp = fitz.open(pdf_path)
+                    doc_final.insert_pdf(doc_temp)
+                    doc_temp.close()
+                except Exception as e:
+                    print(f"Ignorando arquivo defeituoso {pdf_file}: {e}")
+            
+            # Salvar usando Garbage=4 e Deflate, a melhor forma de comprimir PDF no fitz (PyMuPDF)
+            # Ele limpará fontes não usadas e streams duplicadas
+            doc_final.save(output_path, garbage=4, deflate=True)
+            doc_final.close()
+            
+            messagebox.showinfo("Concluído", f"Sucesso!\n{len(pdfs)} arquivos foram unificados e salvos como '{output_name}' na mesma pasta.\n\nEles foram comprimidos (dados não usados apagados e otimizados) automaticamente.")
+            
+        except Exception as e:
+            messagebox.showerror("Erro Fatal", f"Ocorreu um erro ao processar os PDFs:\n\n{e}")
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = ToolApp(root)
+    try:
+        style = ttk.Style()
+        if "aqua" in style.theme_names():
+            style.theme_use("aqua")
+    except:
+        pass
+    root.mainloop()
