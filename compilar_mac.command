@@ -9,7 +9,7 @@ fi
 source venv/bin/activate
 pip install openpyxl pillow pillow-heif pymupdf pyinstaller
 
-pyinstaller --noconfirm --windowed --noconsole --name "RenomeadorApp" renomeador.py
+pyinstaller --noconfirm --windowed --noconsole --name "RenomeadorApp" --icon "icon.ico" --add-data "logo_ecowave.png:." renomeador.py
 echo "--------------------------------------------------------"
 echo "COMPILACAO CONCLUIDA!"
 echo "O aplicativo (RenomeadorApp.app) esta dentro da pasta 'dist/RenomeadorApp.app'."

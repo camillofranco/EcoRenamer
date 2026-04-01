@@ -1,6 +1,6 @@
 {
-    "version": "1.2.1",
-    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.2.1/EcoRenamer_Win.zip",
-    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.2.1/EcoRenamer_Mac.zip",
-    "changelog": "Botão 'Limpar Tabela', correções no Drag & Drop e Autoupdater!"
+    "version": "1.3.0",
+    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.3.0/EcoRenamer_Win.zip",
+    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.3.0/EcoRenamer_Mac.zip",
+    "changelog": "UPGRADE PRO: Processamento Paralelo (Ultrarrápido), Interface EcoWave Premium, Logotipo e Novo Ícone!"
 }

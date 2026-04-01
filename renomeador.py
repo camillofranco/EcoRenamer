@@ -15,10 +15,22 @@ import subprocess
 import webbrowser
 import json
 import urllib.request
+import sys
+from concurrent.futures import ThreadPoolExecutor
+from tkinter import font as tkfont
+from PIL import ImageTk
 
-VERSION = "1.2.1"
+VERSION = "1.3.0"
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
+ 
+def resource_path(relative_path):
+    """Obtém o caminho real para arquivos embutidos no binário (.exe ou .app)"""
+    try:
+        base_path = sys._MEIPASS
+    except:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 # Suporte cross-platform para .HEIC (iPhone)
 try:
@@ -47,12 +59,68 @@ class ToolApp:
         self.pdf_output_name = tk.StringVar(value="Documento_Unificado.pdf")
         self.pdf_sort_order = tk.StringVar(value="Crescente (A-Z)")
         
-        # Variáveis de Interface
-        self.processing = False
+        # Configurações de Design (Paleta EcoWave)
+        self.colors = {
+            "primary": "#2E7D32",     # Verde EcoWave
+            "secondary": "#4527A0",   # Roxo EcoWave
+            "bg": "#f5f5f5",          # Cinza Claro Fundo
+            "text": "#333333",        # Texto Escuro
+            "white": "#ffffff",       # Branco
+            "accent": "#1B5E20",      # Verde Escuro (hovers)
+            "purple_light": "#5E35B1" # Roxo Claro (hovers)
+        }
         
+        self.setup_styles()
         self.create_widgets()
         
+    def setup_styles(self):
+        style = ttk.Style()
+        # No Mac, alguns elementos de estilo do ttk são limitados, então focamos no que funciona
+        style.theme_use("clam") # 'clam' permite mais customização de cores que o 'aqua'
+        
+        style.configure("TNotebook", background=self.colors["bg"])
+        style.configure("TNotebook.Tab", padding=[15, 5], font=("", 11, "bold"))
+        
+        style.configure("TFrame", background=self.colors["bg"])
+        style.configure("TLabel", background=self.colors["bg"], foreground=self.colors["text"], font=("", 11))
+        
+        # Botões Customizados
+        style.configure("Primary.TButton", font=("", 11, "bold"), padding=10, background=self.colors["primary"], foreground="white")
+        style.map("Primary.TButton", background=[("active", self.colors["accent"])])
+        
+        style.configure("Secondary.TButton", font=("", 10), padding=5, background=self.colors["secondary"], foreground="white")
+        style.map("Secondary.TButton", background=[("active", self.colors["purple_light"])])
+        
+        style.configure("Treeview", rowheight=25, font=("", 10))
+        style.configure("Treeview.Heading", font=("", 10, "bold"))
+        
+        # Progressbar
+        style.configure("Eco.Horizontal.TProgressbar", thickness=15, troughcolor=self.colors["white"], background=self.colors["primary"])
+
     def create_widgets(self):
+        # Frame de Logo e Cabeçalho
+        frame_header = tk.Frame(self.root, bg=self.colors["white"], height=100)
+        frame_header.pack(side="top", fill="x")
+        frame_header.pack_propagate(False)
+        
+        try:
+            # Tenta carregar o logo embutido
+            logo_img = Image.open(resource_path("logo_ecowave.png"))
+            # Redimensiona mantendo proporção (ex: altura 60px)
+            aspect = logo_img.width / logo_img.height
+            logo_img = logo_img.resize((int(60 * aspect), 60), Image.Resampling.LANCZOS)
+            self.logo_tk = ImageTk.PhotoImage(logo_img)
+            
+            lbl_logo = tk.Label(frame_header, image=self.logo_tk, bg=self.colors["white"])
+            lbl_logo.pack(side="left", padx=20, pady=10)
+        except:
+            # Fallback se o logo sumir
+            tk.Label(frame_header, text="eco", font=("Arial", 32, "bold"), fg=self.colors["primary"], bg=self.colors["white"]).pack(side="left", padx=(20, 0))
+            tk.Label(frame_header, text="wave", font=("Arial", 32, "bold"), fg=self.colors["secondary"], bg=self.colors["white"]).pack(side="left")
+        
+        lbl_title = tk.Label(frame_header, text="Renomeador Profissional", font=("", 16, "bold"), fg=self.colors["text"], bg=self.colors["white"])
+        lbl_title.pack(side="right", padx=20)
+
         notebook = ttk.Notebook(self.root)
         notebook.pack(fill="both", expand=True)
         
@@ -114,7 +182,7 @@ class ToolApp:
         
         ttk.Checkbutton(frame_top, text="Comprimir Fotos (Funciona p/ Windows e Mac)", variable=self.compress_var).grid(row=4, column=0, columnspan=2, sticky="w", pady=8)
         
-        btn_load = ttk.Button(frame_top, text="1. Carregar Prévia do Mapeamento", command=self.load_data)
+        btn_load = ttk.Button(frame_top, text="1. Carregar Prévia do Mapeamento", command=self.load_data, style="Primary.TButton")
         btn_load.grid(row=5, column=0, columnspan=2, pady=15, sticky="ew")
         
         btn_clear_table = ttk.Button(frame_top, text="Limpar Tabela", command=self.reset_preview)
@@ -156,12 +224,22 @@ class ToolApp:
         frame_bot.grid(row=2, column=0, sticky="ew")
         frame_bot.columnconfigure(0, weight=1)
         
-        self.btn_rename = ttk.Button(frame_bot, text="2. Renomear Arquivos", command=self.rename_files, state="disabled")
+        self.btn_rename = ttk.Button(frame_bot, text="2. Renomear Arquivos", command=self.rename_files, state="disabled", style="Primary.TButton")
         self.btn_rename.grid(row=0, column=0, pady=5, sticky="ew")
         
-        self.progress = ttk.Progressbar(frame_bot, orient="horizontal", length=100, mode="determinate")
-        self.progress.grid(row=1, column=0, pady=5, sticky="ew")
-        self.progress.grid_remove() # Oculto inicialmente
+        # Novo sistema de progresso com texto
+        self.frame_progress = ttk.Frame(frame_bot)
+        self.frame_progress.grid(row=1, column=0, sticky="ew")
+        self.frame_progress.grid_remove()
+        
+        self.lbl_status = ttk.Label(self.frame_progress, text="Aguardando...", font=("", 10))
+        self.lbl_status.pack(side="top", anchor="w")
+        
+        self.progress = ttk.Progressbar(self.frame_progress, orient="horizontal", length=100, mode="determinate", style="Eco.Horizontal.TProgressbar")
+        self.progress.pack(fill="x", pady=(2, 0))
+        
+        self.lbl_perc = ttk.Label(self.frame_progress, text="0%", font=("", 9, "bold"))
+        self.lbl_perc.place(relx=0.5, rely=0.6, anchor="center")
 
     def create_pdf_widgets(self, parent):
         parent.columnconfigure(0, weight=1)
@@ -500,51 +578,84 @@ class ToolApp:
             
         self.processing = True
         self.btn_rename.config(state="disabled")
-        self.progress.grid() # Mostra barra
+        self.frame_progress.grid()
         self.progress['value'] = 0
         self.progress['maximum'] = len(self.mapping)
+        self.lbl_perc.config(text="0%")
+        self.lbl_status.config(text="Iniciando processamento paralelo...")
         
-        # Inicia thread para nao travar a interface
-        threading.Thread(target=self.run_rename_task, daemon=True).start()
+        threading.Thread(target=self.run_rename_task_parallel, daemon=True).start()
 
-    def run_rename_task(self):
+    def run_rename_task_parallel(self):
         sucessos = 0
         falhas = 0
         erros_msg = []
         
-        for idx, item in enumerate(self.mapping):
-            if os.path.exists(item['new_path']) and item['orig_path'] != item['new_path']:
-                erros_msg.append(f"{item['orig_name']} -> O destino {item['new_name']} já existe.")
-                falhas += 1
-            else:
-                try:
-                    if self.compress_var.get():
-                        img = Image.open(item['orig_path'])
-                        img = ImageOps.exif_transpose(img) # auto-girar corretamente foto
-                        img.thumbnail((800, 800), Image.Resampling.LANCZOS)
-                        img = img.convert("RGB")
-                        
-                        if item['orig_path'] == item['new_path']:
-                            temp_path = item['orig_path'] + "_temp.jpg"
-                            img.save(temp_path, "JPEG", optimize=True, quality=45)
-                            img.close()
-                            os.remove(item['orig_path'])
-                            os.rename(temp_path, item['new_path'])
-                        else:
-                            img.save(item['new_path'], "JPEG", optimize=True, quality=45)
-                            img.close()
-                            os.remove(item['orig_path'])
-                        sucessos += 1
-                    else:
-                        if item['orig_path'] != item['new_path']:
-                            os.rename(item['orig_path'], item['new_path'])
-                        sucessos += 1
-                except Exception as e:
-                    erros_msg.append(f"{item['orig_name']}: {str(e)}")
+        total = len(self.mapping)
+        
+        # Usamos ThreadPoolExecutor para processar imagens paralelamente
+        # No Mac, o limitador costuma ser CPU para compressão e I/O
+        # max_workers=None usa núcleos disponíveis
+        with ThreadPoolExecutor() as executor:
+            # Envia tarefas
+            futures = []
+            for idx, item in enumerate(self.mapping):
+                futures.append(executor.submit(self.process_single_image, item, idx))
+                
+            # Coleta resultados
+            for i, future in enumerate(futures):
+                res_ok, res_msg = future.result()
+                if res_ok:
+                    sucessos += 1
+                else:
                     falhas += 1
-            
-            # Atualiza progresso na interface via root.after
-            self.root.after(0, lambda v=idx+1: self.progress.configure(value=v))
+                    erros_msg.append(res_msg)
+                
+                # Atualiza UI
+                perc = int(((i + 1) / total) * 100)
+                status_txt = f"Processando {i+1} de {total}..."
+                if i < total - 1:
+                    status_txt += f" (Atual: {self.mapping[i+1]['orig_name']})"
+                
+                self.root.after(0, lambda v=i+1, p=perc, s=status_txt: self.update_ui_progress(v, p, s))
+
+        # Finaliza na interface
+        self.root.after(0, lambda: self.finish_rename(sucessos, falhas, erros_msg))
+
+    def update_ui_progress(self, val, perc, status):
+        self.progress['value'] = val
+        self.lbl_perc.config(text=f"{perc}%")
+        self.lbl_status.config(text=status)
+
+    def process_single_image(self, item, index):
+        """Função executada em thread separada para cada imagem"""
+        if os.path.exists(item['new_path']) and item['orig_path'] != item['new_path']:
+            return False, f"{item['orig_name']} -> O destino {item['new_name']} já existe."
+        
+        try:
+            if self.compress_var.get():
+                img = Image.open(item['orig_path'])
+                img = ImageOps.exif_transpose(img)
+                img.thumbnail((800, 800), Image.Resampling.LANCZOS)
+                img = img.convert("RGB")
+                
+                if item['orig_path'] == item['new_path']:
+                    temp_path = item['orig_path'] + "_temp.jpg"
+                    img.save(temp_path, "JPEG", optimize=True, quality=45)
+                    img.close()
+                    os.remove(item['orig_path'])
+                    os.rename(temp_path, item['new_path'])
+                else:
+                    img.save(item['new_path'], "JPEG", optimize=True, quality=45)
+                    img.close()
+                    os.remove(item['orig_path'])
+            else:
+                if item['orig_path'] != item['new_path']:
+                    shutil.copy2(item['orig_path'], item['new_path']) # Usamos copy2 e depois remove p/ segurança
+                    os.remove(item['orig_path'])
+            return True, ""
+        except Exception as e:
+            return False, f"{item['orig_name']}: {str(e)}"
 
         # Finaliza na interface
         self.root.after(0, lambda: self.finish_rename(sucessos, falhas, erros_msg))
@@ -558,7 +669,7 @@ class ToolApp:
             messagebox.showinfo("Sucesso", msg)
         
         self.processing = False
-        self.progress.grid_remove() # Esconde barra
+        self.frame_progress.grid_remove() # Esconde barra
         self.reset_preview()
 
     # ------------------ LÓGICA PDFs ------------------
