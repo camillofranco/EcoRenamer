@@ -17,7 +17,7 @@ import urllib.request
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
-VERSION = "1.4.3" # Hotfix Critico: Caminho do auto-updater
+VERSION = "1.4.4" # Warning amigável para Errno 89 (Nuvem)
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
@@ -482,6 +482,11 @@ class ToolApp:
             else:
                 shutil.copy2(item['orig_path'], temp_target)
             return True, ""
+        except OSError as e:
+            err_str = str(e).lower()
+            if hasattr(e, 'errno') and e.errno == 89 or "operation canceled" in err_str or "canceled" in err_str:
+                return False, f"{item['orig_name']}: Preso na Nuvem! Espere o Google Drive/iCloud baixar a foto para o Mac."
+            return False, f"{item['orig_name']}: Erro de disco: {e}"
         except Exception as e:
             return False, f"{item['orig_name']}: {str(e)}"
 
