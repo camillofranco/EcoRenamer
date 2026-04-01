@@ -58,6 +58,7 @@ class ToolApp:
         self.pdf_folder = tk.StringVar()
         self.pdf_output_name = tk.StringVar(value="Documento_Unificado.pdf")
         self.pdf_sort_order = tk.StringVar(value="Crescente (A-Z)")
+        self.processing = False # Fix: Initialize processing flag
         
         # Configurações de Design Premium (Paleta EcoWave)
         self.colors = {
@@ -77,78 +78,148 @@ class ToolApp:
         style = ttk.Style()
         style.theme_use("clam")
         
-        # Notebook (Abas)
+        # Notebook de Luxo
         style.configure("TNotebook", background=self.colors["bg"], borderwidth=0)
-        style.configure("TNotebook.Tab", padding=[20, 8], font=("", 12, "bold"))
-        style.map("TNotebook.Tab", background=[("selected", self.colors["primary"])], foreground=[("selected", "white")])
+        style.configure("TNotebook.Tab", padding=[25, 10], font=("", 12, "bold"), background="#e9ecef")
+        style.map("TNotebook.Tab", 
+                  background=[("selected", self.colors["primary"])], 
+                  foreground=[("selected", "white")])
         
-        # Frames e Labels
         style.configure("TFrame", background=self.colors["bg"])
         style.configure("TLabel", background=self.colors["bg"], foreground=self.colors["text"], font=("", 11))
         
-        # Botões Premium (Ações Principais)
-        style.configure("Primary.TButton", font=("", 12, "bold"), padding=12, background=self.colors["primary"], foreground="white", borderwidth=0)
-        style.map("Primary.TButton", background=[("active", "#1B5E20"), ("disabled", "#adb5bd")])
+        # Estilo para Entradas e Spinbox (Modernizado)
+        style.configure("TEntry", fieldbackground="white", padding=5)
         
-        # Botões Secundários (Ações Menores)
-        style.configure("Secondary.TButton", font=("", 10, "bold"), padding=8, background=self.colors["secondary"], foreground="white")
-        style.map("Secondary.TButton", background=[("active", "#311B92")])
+        # Estilo para Tabela (Treeview) High-Contrast
+        style.configure("Treeview", background="white", foreground="#333", rowheight=35, fieldbackground="white", font=("", 10))
+        style.configure("Treeview.Heading", font=("", 11, "bold"), background="#343a40", foreground="white")
         
-        # Estilo para Tabela (Treeview)
-        style.configure("Treeview", background="white", foreground="#333", rowheight=30, fieldbackground="white", font=("", 10))
-        style.configure("Treeview.Heading", font=("", 11, "bold"), background="#e9ecef", foreground=self.colors["text"])
-        
-        # Progressbar customizada
-        style.configure("Eco.Horizontal.TProgressbar", thickness=20, troughcolor="#e9ecef", background=self.colors["primary"])
+        # Progressbar Grossa e Verde
+        style.configure("Eco.Horizontal.TProgressbar", thickness=25, troughcolor="#e9ecef", background=self.colors["primary"])
 
     def create_widgets(self):
-        # Cabeçalho de Luxo
-        self.header = tk.Frame(self.root, bg=self.colors["header_bg"], height=100, relief="flat")
+        # Header "Apple-Style" White
+        self.header = tk.Frame(self.root, bg=self.colors["header_bg"], height=110)
         self.header.pack(side="top", fill="x")
         self.header.pack_propagate(False)
         
-        # Borda inferior sutil do cabeçalho
-        tk.Frame(self.root, bg=self.colors["border"], height=1).pack(side="top", fill="x")
+        # Sombra sutil sob o header
+        tk.Frame(self.root, bg="#ced4da", height=1).pack(side="top", fill="x")
         
         try:
-            # Carrega o logo ORIGINAL e SHARP
+            # Carrega o logo ORIGINAL
             logo_img = Image.open(resource_path("logo_ecowave.png"))
-            # Altura ideal para o cabeçalho
-            target_h = 70
+            target_h = 75
             aspect = logo_img.width / logo_img.height
             logo_img = logo_img.resize((int(target_h * aspect), target_h), Image.Resampling.LANCZOS)
             self.logo_tk = ImageTk.PhotoImage(logo_img)
             
             lbl_logo = tk.Label(self.header, image=self.logo_tk, bg=self.colors["header_bg"])
-            lbl_logo.pack(side="left", padx=30, pady=15)
+            lbl_logo.pack(side="left", padx=40, pady=15)
         except:
-            # Fallback elegante (Texto se o logo falhar)
-            tk.Label(self.header, text="ECOWAVE PRO", font=("Arial", 28, "bold"), fg=self.colors["primary"], bg=self.colors["header_bg"]).pack(side="left", padx=30)
+            tk.Label(self.header, text="ECOWAVE PRO", font=("Arial", 30, "bold"), fg=self.colors["primary"], bg=self.colors["header_bg"]).pack(side="left", padx=40)
         
-        lbl_info = tk.Label(self.header, text=f"v{VERSION} | Enterprise Edition", font=("", 10, "bold"), fg="#6c757d", bg=self.colors["header_bg"])
-        lbl_info.pack(side="right", padx=30)
+        # Badge Enterprise
+        frame_badge = tk.Frame(self.header, bg="#f8f9fa", padx=10, pady=5)
+        frame_badge.pack(side="right", padx=40)
+        tk.Label(frame_badge, text="ENTERPRISE EDITION", font=("", 9, "bold"), fg=self.colors["secondary"], bg="#f8f9fa").pack()
+        tk.Label(frame_badge, text=f"Build v{VERSION}", font=("", 8), fg="#6c757d", bg="#f8f9fa").pack()
 
-        notebook = ttk.Notebook(self.root)
-        notebook.pack(fill="both", expand=True, padx=10, pady=10)
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill="both", expand=True, padx=20, pady=20)
         
-        frame_img = ttk.Frame(notebook)
-        notebook.add(frame_img, text="📸 GESTÃO DE IMAGENS")
+        frame_img = ttk.Frame(self.notebook)
+        self.notebook.add(frame_img, text=" 📸  GESTÃO DE IMAGENS ")
         
-        frame_pdf = ttk.Frame(notebook)
-        notebook.add(frame_pdf, text="📄 GESTÃO DE PDFS")
+        frame_pdf = ttk.Frame(self.notebook)
+        self.notebook.add(frame_pdf, text=" 📄  GESTÃO DE PDFS ")
         
         self.create_img_widgets(frame_img)
         self.create_pdf_widgets(frame_pdf)
         
-        # Status Bar Estilizada
-        self.status_bar = tk.Frame(self.root, bg="#f1f3f5", height=30)
+        # Barra de Status Clean
+        self.status_bar = tk.Frame(self.root, bg="#ffffff", height=35)
         self.status_bar.pack(side="bottom", fill="x")
+        tk.Frame(self.root, bg="#ced4da", height=1).pack(side="bottom", fill="x") # Borda superior status
         
-        tk.Label(self.status_bar, text=f"Aguardando ação em {platform.system()}...", font=("", 9), bg="#f1f3f5", fg="#495057").pack(side="left", padx=20)
-        ttk.Button(self.status_bar, text="Verificar Atualização", command=self.check_for_updates, style="Small.TButton").pack(side="right", padx=10, pady=2)
+        self.lbl_os_status = tk.Label(self.status_bar, text=f"Ambiente: {platform.system()} | Processamento: Paralelo Ativo", font=("", 9), bg="#ffffff", fg="#6c757d")
+        self.lbl_os_status.pack(side="left", padx=25)
         
-        style = ttk.Style()
-        style.configure("Small.TButton", font=("", 8))
+        btn_upd = tk.Button(self.status_bar, text="Checar Atualização", command=self.check_for_updates, font=("", 8, "bold"), bg="#ffffff", fg=self.colors["primary"], relief="flat", cursor="hand2")
+        btn_upd.pack(side="right", padx=15)
+
+    def create_img_widgets(self, parent):
+        parent.columnconfigure(0, weight=1)
+        parent.rowconfigure(2, weight=1)
+        
+        frame_top = ttk.Frame(parent, padding="20")
+        frame_top.grid(row=0, column=0, sticky="ew")
+        frame_top.columnconfigure(1, weight=1)
+        
+        # Seção de Seleção
+        tk.Label(frame_top, text="PASTA DE IMAGENS", font=("", 10, "bold"), fg="#495057", bg=self.colors["bg"]).grid(row=0, column=0, sticky="w", pady=(0, 5))
+        ent_folder = tk.Entry(frame_top, textvariable=self.img_folder, state="readonly", font=("", 11), bg="white", relief="solid", borderwidth=1)
+        ent_folder.grid(row=1, column=0, columnspan=2, sticky="ew", padx=(0, 10), ipady=5)
+        
+        btn_sel = tk.Button(frame_top, text="SELECIONAR", command=self.select_img_folder, bg=self.colors["secondary"], fg="white", font=("", 10, "bold"), relief="flat", padx=15)
+        btn_sel.grid(row=1, column=2, sticky="ew")
+        
+        # Configurações secundárias em linha
+        frame_opts = tk.Frame(frame_top, bg=self.colors["bg"])
+        frame_opts.grid(row=2, column=0, columnspan=3, sticky="ew", pady=20)
+        
+        tk.Label(frame_opts, text="DÍGITOS:", font=("", 10, "bold"), bg=self.colors["bg"]).pack(side="left")
+        tk.Spinbox(frame_opts, from_=1, to=10, textvariable=self.digits, width=4, font=("", 11), relief="solid").pack(side="left", padx=(5, 20))
+        
+        tk.Label(frame_opts, text="ORDEM:", font=("", 10, "bold"), bg=self.colors["bg"]).pack(side="left")
+        cb_ordem = ttk.Combobox(frame_opts, textvariable=self.sort_order, values=["Decrescente (Z-A)", "Crescente (A-Z)"], state="readonly", width=18)
+        cb_ordem.pack(side="left", padx=(5, 20))
+        
+        tk.Checkbutton(frame_opts, text="COMPRIMIR FOTOS (HD)", variable=self.compress_var, font=("", 10, "bold"), fg=self.colors["primary"], bg=self.colors["bg"]).pack(side="left")
+        
+        # BOTÃO CHAMATIVO 1: CARREGAR
+        self.btn_load_custom = tk.Button(frame_top, text="1. VISUALIZAR MAPEAMENTO PRO", command=self.load_data, 
+                                        bg=self.colors["primary"], fg="white", font=("", 12, "bold"), relief="flat", cursor="hand2", pady=12)
+        self.btn_load_custom.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(10, 0))
+        
+        # Tabela (Treeview)
+        frame_mid = ttk.Frame(parent, padding="20")
+        frame_mid.grid(row=1, column=0, sticky="nsew")
+        parent.rowconfigure(1, weight=1)
+        frame_mid.columnconfigure(0, weight=1)
+        frame_mid.rowconfigure(0, weight=1)
+        
+        cols = ("pos", "orig", "novo", "tam_orig", "tam_est")
+        self.tree = Treeview(frame_mid, columns=cols, show="headings", selectmode="browse")
+        for col in cols: self.tree.heading(col, text=col.upper())
+        
+        scrollbar = ttk.Scrollbar(frame_mid, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscroll=scrollbar.set)
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        scrollbar.grid(row=0, column=1, sticky="ns")
+        
+        # Rodapé com Botão de Ação Final
+        frame_bot = tk.Frame(parent, bg=self.colors["bg"], padding=20)
+        frame_bot.grid(row=2, column=0, sticky="ew")
+        
+        self.btn_rename_custom = tk.Button(frame_bot, text="2. INICIAR RENOMEAÇÃO PRO (ULTRARRÁPIDA)", command=self.rename_files,
+                                          bg=self.colors["primary"], fg="white", font=("", 13, "bold"), relief="flat", cursor="hand2", pady=15, state="disabled")
+        self.btn_rename_custom.pack(fill="x")
+        
+        # Área de Progresso
+        self.frame_progress = tk.Frame(frame_bot, bg=self.colors["bg"], pady=10)
+        self.frame_progress.pack(fill="x")
+        self.frame_progress.pack_forget()
+        
+        self.lbl_status = tk.Label(self.frame_progress, text="Pronto.", font=("", 10, "bold"), bg=self.colors["bg"], fg=self.colors["secondary"])
+        self.lbl_status.pack(anchor="w")
+        
+        self.progress = ttk.Progressbar(self.frame_progress, orient="horizontal", length=100, mode="determinate", style="Eco.Horizontal.TProgressbar")
+        self.progress.pack(fill="x", pady=5)
+        
+        self.lbl_perc = tk.Label(self.frame_progress, text="0%", font=("", 10, "bold"), bg=self.colors["bg"], fg=self.colors["primary"])
+        self.lbl_perc.pack()
 
     def create_img_widgets(self, parent):
         parent.columnconfigure(0, weight=1)
@@ -572,7 +643,7 @@ class ToolApp:
             self.tree.insert("", "end", values=(idx + 1, item['orig_name'], item['new_name'], item['size_orig_str'], item['size_est_str']))
             
         if self.mapping:
-            self.btn_rename.config(state="normal")
+            self.btn_rename_custom.config(state="normal")
             
     def rename_files(self):
         if not self.mapping or self.processing:
@@ -583,8 +654,8 @@ class ToolApp:
             return
             
         self.processing = True
-        self.btn_rename.config(state="disabled")
-        self.frame_progress.grid()
+        self.btn_rename_custom.config(state="disabled")
+        self.frame_progress.pack(fill="x")
         self.progress['value'] = 0
         self.progress['maximum'] = len(self.mapping)
         self.lbl_perc.config(text="0%")
@@ -674,10 +745,33 @@ class ToolApp:
             messagebox.showinfo("Sucesso", msg)
         
         self.processing = False
-        self.frame_progress.grid_remove() # Esconde barra
+        self.frame_progress.pack_forget() # Esconde barra (fix pack_forget)
         self.reset_preview()
 
-    # ------------------ LÓGICA PDFs ------------------
+    def create_pdf_widgets(self, parent):
+        parent.columnconfigure(0, weight=1)
+        
+        frame_top = tk.Frame(parent, bg=self.colors["bg"], padx=20, pady=20)
+        frame_top.grid(row=0, column=0, sticky="ew")
+        frame_top.columnconfigure(1, weight=1)
+        
+        tk.Label(frame_top, text="PASTA COM PDFs:", font=("", 10, "bold"), bg=self.colors["bg"], fg="#495057").grid(row=0, column=0, sticky="w", pady=(0,5))
+        ent_pdf = tk.Entry(frame_top, textvariable=self.pdf_folder, state="readonly", font=("", 11), bg="white", relief="solid")
+        ent_pdf.grid(row=1, column=0, columnspan=2, sticky="ew", padx=(0,10), ipady=5)
+        
+        btn_sel = tk.Button(frame_top, text="SELECIONAR", command=self.select_pdf_folder, bg=self.colors["secondary"], fg="white", font=("", 10, "bold"), relief="flat")
+        btn_sel.grid(row=1, column=2, sticky="ew")
+        
+        tk.Label(frame_top, text="NOME DO ARQUIVO FINAL:", font=("", 10, "bold"), bg=self.colors["bg"], fg="#495057").grid(row=2, column=0, sticky="w", pady=(15,5))
+        ent_out = tk.Entry(frame_top, textvariable=self.pdf_output_name, font=("", 11), bg="white", relief="solid")
+        ent_out.grid(row=3, column=0, columnspan=3, sticky="ew", ipady=5)
+        
+        # Botão de Ação PDF
+        btn_merge = tk.Button(parent, text="UNIFICAR E OTIMIZAR PDFs AGORA", command=self.merge_pdfs,
+                             bg=self.colors["primary"], fg="white", font=("", 12, "bold"), relief="flat", cursor="hand2", pady=15)
+        btn_merge.grid(row=1, column=0, pady=30, padx=20, sticky="ew")
+
+    # ------------------ LÓGICA FINAL PDFs ------------------
     def select_pdf_folder(self):
         folder = filedialog.askdirectory(title="Selecione a pasta com os PDFs")
         if folder:
@@ -704,7 +798,7 @@ class ToolApp:
         if "Decrescente" in ordem:
             pdfs.sort(reverse=True)
         else:
-            pdfs.sort(reverse=False) # Ordem padrão pra PDF costuma ser página 1 primeiro, então crescente
+            pdfs.sort(reverse=False)
             
         output_name = self.pdf_output_name.get().strip()
         if not output_name:
@@ -715,18 +809,15 @@ class ToolApp:
             
         output_path = os.path.join(folder, output_name)
         
-        # Evitar loop infinito se o arquivo q estamos querendo gerar já estiver na pasta e na lista
         if output_name in pdfs:
             pdfs.remove(output_name)
             
         if not pdfs:
-            messagebox.showwarning("Aviso", "Nenhum PDF para processar (além do próprio arquivo final já existente).")
+            messagebox.showwarning("Aviso", "Nenhum PDF para processar.")
             return
             
         try:
-            # Cria doc PDF em branco
             doc_final = fitz.open() 
-            
             for pdf_file in pdfs:
                 pdf_path = os.path.join(folder, pdf_file)
                 try:
@@ -736,13 +827,9 @@ class ToolApp:
                 except Exception as e:
                     print(f"Ignorando arquivo defeituoso {pdf_file}: {e}")
             
-            # Salvar usando Garbage=4 e Deflate, a melhor forma de comprimir PDF no fitz (PyMuPDF)
-            # Ele limpará fontes não usadas e streams duplicadas
             doc_final.save(output_path, garbage=4, deflate=True)
             doc_final.close()
-            
-            messagebox.showinfo("Concluído", f"Sucesso!\n{len(pdfs)} arquivos foram unificados e salvos como '{output_name}' na mesma pasta.\n\nEles foram comprimidos (dados não usados apagados e otimizados) automaticamente.")
-            
+            messagebox.showinfo("Concluído", f"Sucesso!\n{len(pdfs)} arquivos unificados em '{output_name}'.")
         except Exception as e:
             messagebox.showerror("Erro Fatal", f"Ocorreu um erro ao processar os PDFs:\n\n{e}")
 
