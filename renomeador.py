@@ -17,7 +17,7 @@ import urllib.request
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
-VERSION = "1.4.0" # Upgrade version para Premium
+VERSION = "1.4.1" # Upgrade version para Seamless Auto-Update
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
@@ -540,27 +540,83 @@ class ToolApp:
                 data = json.loads(r.read().decode())
                 remote_ver = data.get("version", VERSION)
                 if remote_ver > VERSION:
-                    msg = f"Tem atualização: {remote_ver}\nMudanças: {data.get('changelog')}\nDeseja baixar?"
-                    if messagebox.askyesno("Atualização", msg):
+                    msg = f"Nova versão encontrada: v{remote_ver}\nMudanças: {data.get('changelog')}\n\nDeseja fechar, instalar silenciosamente e reiniciar agora?"
+                    if messagebox.askyesno("Atualização Pronta", msg):
                         os_name = platform.system()
                         url = data.get("download_url_mac") if os_name == "Darwin" else data.get("download_url_win")
                         if url: threading.Thread(target=self.run_auto_update, args=(url, remote_ver), daemon=True).start()
-                        else: webbrowser.open(REFS_URL)
-                else: messagebox.showinfo("Legal", "Você tem a melhor versão.")
+                        else: messagebox.showinfo("Erro", "URL de instalação não encontrada no servidor.")
+                else: messagebox.showinfo("App em Dia", "Você já está rodando a última Enterprise Edition.")
         except: pass
 
     def run_auto_update(self, url, version):
+        # UI Freeze de Download
+        self.btn_rename.configure(state="disabled")
+        try: self.btn_load.configure(state="disabled")
+        except: pass
+        self.frame_progress.pack(fill="x", pady=10)
+        self.lbl_status.configure(text=f"Abaixando pacote v{version} (Em Background)...")
+        self.progress.set(0.3)
+        self.lbl_perc.configure(text="30%")
+        
         try:
-            temp_dir = os.path.join(os.path.expanduser("~"), "Downloads", f"EcoRenamer_{version}")
+            temp_dir = os.path.join(os.path.expanduser("~"), ".ecowave_update_tmp")
             if os.path.exists(temp_dir): shutil.rmtree(temp_dir)
             os.makedirs(temp_dir)
+            
             zpath = os.path.join(temp_dir, "u.zip")
             urllib.request.urlretrieve(url, zpath)
+            
+            self.lbl_status.configure(text="Pré-Instalando e Descompactando...")
+            self.progress.set(0.8)
             with zipfile.ZipFile(zpath, 'r') as zf: zf.extractall(temp_dir)
-            if platform.system() == "Darwin": subprocess.run(["open", temp_dir])
-            else: os.startfile(temp_dir)
+            
+            # Bloqueio caso seja rodado via Python Raw
+            is_frozen = getattr(sys, 'frozen', False)
+            if not is_frozen:
+                messagebox.showinfo("Dev Mode", "Instalador baixado, mas ignorado pois não é um executável compilado (.app ou .exe).")
+                self.frame_progress.pack_forget()
+                return
+                
+            os_name = platform.system()
+            if os_name == "Darwin":
+                # Estrutura do Mac: MeuApp.app/Contents/MacOS/executavel
+                app_path = os.path.abspath(os.path.join(os.path.dirname(sys.executable), "..", "..", ".."))
+                new_app_extracted = os.path.join(temp_dir, "RenomeadorApp.app")
+                
+                script_sh = os.path.join(temp_dir, "updater.command")
+                with open(script_sh, "w") as f:
+                    f.write("#!/bin/bash\n")
+                    f.write("sleep 2\n") # Tempo pro App fechar e liberar a pasta
+                    f.write(f"rsync -a --delete '{new_app_extracted}/' '{app_path}/'\n") # Troca os arquivos
+                    f.write(f"xattr -cr '{app_path}'\n") # BURACO NO GATEKEEPER: Remove quarentena
+                    f.write(f"open '{app_path}'\n") # Reinicia
+                    f.write(f"rm -rf '{temp_dir}'\n") # Limpeza ninja
+                    f.write("rm -- \"$0\"\n") # Auto-destrói o script sh
+                    
+                os.chmod(script_sh, 0o755)
+                subprocess.Popen(["/bin/bash", script_sh], start_new_session=True)
+                sys.exit(0) # Morre
+                
+            else: # Windows
+                app_path = os.path.dirname(sys.executable)
+                exe_name = os.path.basename(sys.executable)
+                
+                script_bat = os.path.join(temp_dir, "updater.bat")
+                with open(script_bat, "w") as f:
+                    f.write("@echo off\n")
+                    f.write("timeout /t 2 /nobreak >nul\n") # Espera App fechar
+                    f.write(f"xcopy /S /E /Y /I \"{temp_dir}\\*\" \"{app_path}\\\"\n") # Subscreve forçado
+                    f.write(f"start \"\" \"{os.path.join(app_path, exe_name)}\"\n") # Inicia novo executável
+                    f.write("del \"%~f0\"\n") # Pede pro arquivo bat tentar se matar
+                    
+                # Roda o BAT desanexado do nosso processo
+                subprocess.Popen([script_bat], creationflags=subprocess.CREATE_NEW_CONSOLE)
+                sys.exit(0) # Mata o App Atual
+                
         except Exception as e:
-            webbrowser.open(REFS_URL)
+            messagebox.showerror("Erro Crítico de Instalação", f"Falha ao realizar 'Seamless Update':\n\n{e}")
+            self.frame_progress.pack_forget()
 
 if __name__ == "__main__":
     # CustomTkinter precisa ser instanciado como ctk.CTk()

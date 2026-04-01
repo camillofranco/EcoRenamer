@@ -3,7 +3,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$DIR"
 
 echo "=========================================================="
-echo "      🏗️ COMPILADOR ECOWAVE PRO v1.4.0 (MACOS)"
+echo "      🏗️ COMPILADOR ECOWAVE PRO v1.4.1 (MACOS)"
 echo "=========================================================="
 
 echo "1. Limpando pastas antigas para evitar erros de cache..."
@@ -36,12 +36,12 @@ fi
 
 echo "6. Finalizando e criando pacote Zip Seguro (-ry)..."
 cd dist
-zip -ry ../EcoRenamer_Mac_v1.4.0.zip RenomeadorApp.app
+zip -ry ../EcoRenamer_Mac_v1.4.1.zip RenomeadorApp.app
 cd ..
 
 echo "--------------------------------------------------------"
 echo "✅ SUCESSO ABSOLUTO!"
-echo "O arquivo pronto para o GitHub é: EcoRenamer_Mac_v1.4.0.zip"
+echo "O arquivo pronto para o GitHub é: EcoRenamer_Mac_v1.4.1.zip"
 echo "O aplicativo para uso direto está em: dist/RenomeadorApp.app"
 echo "--------------------------------------------------------"
 deactivate
