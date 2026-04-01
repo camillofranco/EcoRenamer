@@ -8,6 +8,14 @@ import fitz  # PyMuPDF para juntar PDFs
 import threading
 import math
 
+import webbrowser
+import json
+import urllib.request
+
+VERSION = "1.2.0"
+UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
+REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
+
 # Suporte cross-platform para .HEIC (iPhone)
 try:
     from pillow_heif import register_heif_opener
@@ -18,8 +26,8 @@ except ImportError:
 class ToolApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Ferramentas Múltiplas: Imagens & PDFs")
-        self.root.geometry("850x700")
+        self.root.title(f"EcoRenamer v{VERSION}")
+        self.root.geometry("850x750")
         
         # Variáveis Imagens
         self.img_folder = tk.StringVar()
@@ -52,6 +60,17 @@ class ToolApp:
         
         self.create_img_widgets(frame_img)
         self.create_pdf_widgets(frame_pdf)
+        
+        # Barra de Status inferior com Versão e Atualização
+        frame_status = ttk.Frame(self.root, padding="5")
+        frame_status.pack(side="bottom", fill="x")
+        
+        ttk.Label(frame_status, text=f"Versão {VERSION}", font=("", 9)).pack(side="left", padx=10)
+        ttk.Button(frame_status, text="Verificar Atualização", command=self.check_for_updates, style="Small.TButton").pack(side="right", padx=10)
+        
+        # Estilo para o botão menor
+        style = ttk.Style()
+        style.configure("Small.TButton", font=("", 8))
 
     def create_img_widgets(self, parent):
         parent.columnconfigure(0, weight=1)
@@ -166,6 +185,23 @@ class ToolApp:
         ttk.Label(parent, text=info_text, justify="center", font=("", 11, "italic")).grid(row=2, column=0, pady=20)
 
     # ------------------ UTILITÁRIOS ------------------
+    def check_for_updates(self):
+        try:
+            # Tenta pegar o JSON de versão do GitHub
+            with urllib.request.urlopen(UPDATE_URL, timeout=5) as response:
+                data = json.loads(response.read().decode())
+                remote_version = data.get("version", VERSION)
+                
+                # Comparação simples de string (ex: "1.2.1" > "1.2.0")
+                if remote_version > VERSION:
+                    msg = f"Uma nova versão ({remote_version}) está disponível!\n\nDeseja abrir a página de download?"
+                    if messagebox.askyesno("Atualização Disponível", msg):
+                        webbrowser.open(REFS_URL)
+                else:
+                    messagebox.showinfo("Atualizado", f"Você já está usando a versão mais recente ({VERSION}).")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Não foi possível verificar atualizações:\n{e}")
+
     def format_size(self, size_bytes):
         if size_bytes >= 1024 * 1024:
             return f"{size_bytes / (1024 * 1024):.2f} MB"
