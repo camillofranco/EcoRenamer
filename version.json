@@ -1,6 +1,6 @@
 {
-    "version": "1.3.0",
-    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.3.0/EcoRenamer_Win.zip",
-    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.3.0/EcoRenamer_Mac.zip",
-    "changelog": "UPGRADE PRO: Processamento Paralelo (Ultrarrápido), Interface EcoWave Premium, Logotipo e Novo Ícone!"
+    "version": "1.4.0",
+    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.0/EcoRenamer_Win_v1.4.0.zip",
+    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.0/EcoRenamer_Mac_v1.4.0.zip",
+    "changelog": "v1.4.0\n- Nova Interface CustomTkinter\n- Design 'Enterprise' Responsivo e Adaptativo\n- Cores Nativas EcoWave sem distorcao em Dark Mode\n- Bugfixes menores."
 }
