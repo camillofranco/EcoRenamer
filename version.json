@@ -1,6 +1,6 @@
 {
-    "version": "1.4.2",
-    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.2/EcoRenamer_Win_v1.4.2.zip",
-    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.2/EcoRenamer_Mac_v1.4.2.zip",
-    "changelog": "v1.4.2\n- Fix Critico: Corrigido o congelamento infinito (Deadlock) causado pela barra de progresso do CustomTkinter em segundo plano.\n- Adicionado suporte nativo 'Concurrent Futures' para garantir progresso assincrono verdadeiro.\n- Botoes de Atualizacao remodelados para maximo alcance e visibilidade."
+    "version": "1.4.3",
+    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.3/EcoRenamer_Win_v1.4.3.zip",
+    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.3/EcoRenamer_Mac_v1.4.3.zip",
+    "changelog": "v1.4.3\n- HOTFIX DE SEGURANCA MAXIMA.\n- Corrigido um bug critico no instalador do macOS que permitia delecao de pastas fora do dominio do App.\n- Implementado sistema Guardian que so substitui arquivos se o alvo for estritamente um pacote '.app'.\n- Todos os metodos de delecao no instalador foram desabilitados por design."
 }

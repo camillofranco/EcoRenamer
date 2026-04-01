@@ -17,7 +17,7 @@ import urllib.request
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
-VERSION = "1.4.2" # Upgrade version para Fix UI Thread e Atualizador
+VERSION = "1.4.3" # Hotfix Critico: Caminho do auto-updater
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
@@ -585,18 +585,27 @@ class ToolApp:
                 
             os_name = platform.system()
             if os_name == "Darwin":
-                # Estrutura do Mac: MeuApp.app/Contents/MacOS/executavel
-                app_path = os.path.abspath(os.path.join(os.path.dirname(sys.executable), "..", "..", ".."))
+                # APLICANDO TRAVA TÉCNICA E CORREÇÃO DE CAMINHO (A VIDA DOS SEUS ARQUIVOS)
+                # O executável do Mac fica em: MeuApp.app/Contents/MacOS/app
+                # Recuar 2 pastas (..) cai exatamente na pasta .app
+                app_path = os.path.abspath(os.path.join(os.path.dirname(sys.executable), "..", ".."))
                 new_app_extracted = os.path.join(temp_dir, "RenomeadorApp.app")
+                
+                # TRAVA DE SEGURANÇA: NUNCA subscrever se não for um .app real
+                if not app_path.endswith(".app"):
+                    messagebox.showerror("Erro de Segurança Crítico", f"O atualizador tentou sobrescrever um diretório inválido:\n{app_path}\nAtualização Abortada pelo Sistema de Defesa.")
+                    self.frame_progress.pack_forget()
+                    return
                 
                 script_sh = os.path.join(temp_dir, "updater.command")
                 with open(script_sh, "w") as f:
                     f.write("#!/bin/bash\n")
                     f.write("sleep 2\n") # Tempo pro App fechar e liberar a pasta
-                    f.write(f"rsync -a --delete '{new_app_extracted}/' '{app_path}/'\n") # Troca os arquivos
+                    # FLAG --delete FOI REMOVIDA PARA SEMPRE! Apenas substitui novos arquivos sem excluir nada em volta.
+                    f.write(f"rsync -a '{new_app_extracted}/' '{app_path}/'\n") 
                     f.write(f"xattr -cr '{app_path}'\n") # BURACO NO GATEKEEPER: Remove quarentena
                     f.write(f"open '{app_path}'\n") # Reinicia
-                    f.write(f"rm -rf '{temp_dir}'\n") # Limpeza ninja
+                    f.write(f"rm -rf '{temp_dir}'\n") # Limpeza ninja do zips
                     f.write("rm -- \"$0\"\n") # Auto-destrói o script sh
                     
                 os.chmod(script_sh, 0o755)
