@@ -3,7 +3,7 @@ setlocal
 cd /d %~dp0
 
 echo ==========================================================
-echo       🏗️ COMPILADOR ECOWAVE PRO v1.4.1 (WINDOWS)
+echo       🏗️ COMPILADOR ECOWAVE PRO v1.4.2 (WINDOWS)
 echo ==========================================================
 
 echo 1. Limpando lixos antigos...
@@ -26,11 +26,11 @@ echo 4. Compilando o aplicativo (PyInstaller)...
 pyinstaller --noconfirm --windowed --noconsole --name "RenomeadorApp" --icon "icon.ico" --collect-all customtkinter --add-data "logo_ecowave.png;." renomeador.py
 
 echo 5. Finalizando e Criando Zip Profissional (via PowerShell)...
-powershell -Command "Compress-Archive -Path 'dist\RenomeadorApp\*' -DestinationPath 'EcoRenamer_Win_v1.4.1.zip' -Force"
+powershell -Command "Compress-Archive -Path 'dist\RenomeadorApp\*' -DestinationPath 'EcoRenamer_Win_v1.4.2.zip' -Force"
 
 echo --------------------------------------------------------
 echo ✅ SUCESSO ABSOLUTO!
-echo O arquivo pronto para o GitHub: EcoRenamer_Win_v1.4.1.zip
+echo O arquivo pronto para o GitHub: EcoRenamer_Win_v1.4.2.zip
 echo O aplicativo .exe esta em: dist\RenomeadorApp\RenomeadorApp.exe
 echo --------------------------------------------------------
 pause

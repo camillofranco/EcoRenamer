@@ -17,7 +17,7 @@ import urllib.request
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
-VERSION = "1.4.1" # Upgrade version para Seamless Auto-Update
+VERSION = "1.4.2" # Upgrade version para Fix UI Thread e Atualizador
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
@@ -107,8 +107,8 @@ class ToolApp:
         ctk.CTkLabel(self.status_bar, text=f"SO: {platform.system()} | Paralelismo Ativado (Motor Rápido)", 
                      font=ctk.CTkFont(size=11), text_color="gray").pack(side="left", padx=20)
         
-        btn_upd = ctk.CTkButton(self.status_bar, text="Checar Atualizações", command=self.check_for_updates,
-                                fg_color="transparent", text_color=self.c_primary, font=ctk.CTkFont(size=11, weight="bold"), hover_color=("gray80", "gray25"), width=120)
+        btn_upd = ctk.CTkButton(self.status_bar, text="♻️ Baixar Atualizações", command=self.check_for_updates,
+                                fg_color=self.c_primary, text_color="white", font=ctk.CTkFont(size=12, weight="bold"), hover_color="#1B5E20", width=160, height=30)
         btn_upd.pack(side="right", padx=20, pady=5)
         
     def create_img_tab(self, parent):
@@ -431,22 +431,26 @@ class ToolApp:
         mapping_sq = list(self.mapping)
         total = len(mapping_sq)
         
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
         with ThreadPoolExecutor() as executor:
-            futures = []
-            for idx, item in enumerate(mapping_sq):
-                futures.append(executor.submit(self.process_single_image, item, idx))
-                
-            for i, future in enumerate(futures):
+            # Submete todas as tarefas
+            futures = {executor.submit(self.process_single_image, item, idx): item for idx, item in enumerate(mapping_sq)}
+            
+            concluidos = 0
+            for future in as_completed(futures):
+                concluidos += 1
                 res_ok, res_msg = future.result()
                 if res_ok: sucessos += 1
                 else: 
                     falhas += 1
                     erros_msg.append(res_msg)
                 
-                perc_num = (i + 1) / total
-                self.update_ui_progress(perc_num, int(perc_num * 100), f"Fase 1/2: Compactando ({i+1}/{total})")
+                perc_num = concluidos / total
+                # ATUALIZAÇÃO SEGURA DA GUI: Passar para a thread principal (evita hang/deadlock do Tkinter)
+                self.root.after(0, self.update_ui_progress, perc_num, int(perc_num * 100), f"Fase 1/2: Compactando ({concluidos}/{total})")
 
-        self.lbl_status.configure(text="Fase 2/2: Aplicando nomes definitivos...")
+        self.root.after(0, self.lbl_status.configure, {"text": "Fase 2/2: Aplicando nomes definitivos..."})
         for item in mapping_sq:
             temp_path = item['new_path'] + ".ecotmp"
             if os.path.exists(temp_path):
@@ -460,6 +464,7 @@ class ToolApp:
         self.root.after(0, lambda: self.finish_rename(sucessos, falhas, erros_msg))
 
     def update_ui_progress(self, val_float, perc_int, status):
+        # Esta função agora é chamada de forma segura pela thread principal via root.after
         self.progress.set(val_float)
         self.lbl_perc.configure(text=f"{perc_int}%")
         self.lbl_status.configure(text=status)
