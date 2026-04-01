@@ -59,15 +59,15 @@ class ToolApp:
         self.pdf_output_name = tk.StringVar(value="Documento_Unificado.pdf")
         self.pdf_sort_order = tk.StringVar(value="Crescente (A-Z)")
         
-        # Configurações de Design (Paleta EcoWave)
+        # Configurações de Design Premium (Paleta EcoWave)
         self.colors = {
             "primary": "#2E7D32",     # Verde EcoWave
             "secondary": "#4527A0",   # Roxo EcoWave
-            "bg": "#f5f5f5",          # Cinza Claro Fundo
-            "text": "#333333",        # Texto Escuro
-            "white": "#ffffff",       # Branco
-            "accent": "#1B5E20",      # Verde Escuro (hovers)
-            "purple_light": "#5E35B1" # Roxo Claro (hovers)
+            "bg": "#f8f9fa",          # Cinza-Branco (Moderno)
+            "header_bg": "#ffffff",   # Branco Puro
+            "text": "#212529",        # Texto Dark Gray
+            "border": "#dee2e6",
+            "white": "#ffffff"
         }
         
         self.setup_styles()
@@ -75,72 +75,78 @@ class ToolApp:
         
     def setup_styles(self):
         style = ttk.Style()
-        # No Mac, alguns elementos de estilo do ttk são limitados, então focamos no que funciona
-        style.theme_use("clam") # 'clam' permite mais customização de cores que o 'aqua'
+        style.theme_use("clam")
         
-        style.configure("TNotebook", background=self.colors["bg"])
-        style.configure("TNotebook.Tab", padding=[15, 5], font=("", 11, "bold"))
+        # Notebook (Abas)
+        style.configure("TNotebook", background=self.colors["bg"], borderwidth=0)
+        style.configure("TNotebook.Tab", padding=[20, 8], font=("", 12, "bold"))
+        style.map("TNotebook.Tab", background=[("selected", self.colors["primary"])], foreground=[("selected", "white")])
         
+        # Frames e Labels
         style.configure("TFrame", background=self.colors["bg"])
         style.configure("TLabel", background=self.colors["bg"], foreground=self.colors["text"], font=("", 11))
         
-        # Botões Customizados
-        style.configure("Primary.TButton", font=("", 11, "bold"), padding=10, background=self.colors["primary"], foreground="white")
-        style.map("Primary.TButton", background=[("active", self.colors["accent"])])
+        # Botões Premium (Ações Principais)
+        style.configure("Primary.TButton", font=("", 12, "bold"), padding=12, background=self.colors["primary"], foreground="white", borderwidth=0)
+        style.map("Primary.TButton", background=[("active", "#1B5E20"), ("disabled", "#adb5bd")])
         
-        style.configure("Secondary.TButton", font=("", 10), padding=5, background=self.colors["secondary"], foreground="white")
-        style.map("Secondary.TButton", background=[("active", self.colors["purple_light"])])
+        # Botões Secundários (Ações Menores)
+        style.configure("Secondary.TButton", font=("", 10, "bold"), padding=8, background=self.colors["secondary"], foreground="white")
+        style.map("Secondary.TButton", background=[("active", "#311B92")])
         
-        style.configure("Treeview", rowheight=25, font=("", 10))
-        style.configure("Treeview.Heading", font=("", 10, "bold"))
+        # Estilo para Tabela (Treeview)
+        style.configure("Treeview", background="white", foreground="#333", rowheight=30, fieldbackground="white", font=("", 10))
+        style.configure("Treeview.Heading", font=("", 11, "bold"), background="#e9ecef", foreground=self.colors["text"])
         
-        # Progressbar
-        style.configure("Eco.Horizontal.TProgressbar", thickness=15, troughcolor=self.colors["white"], background=self.colors["primary"])
+        # Progressbar customizada
+        style.configure("Eco.Horizontal.TProgressbar", thickness=20, troughcolor="#e9ecef", background=self.colors["primary"])
 
     def create_widgets(self):
-        # Frame de Logo e Cabeçalho
-        frame_header = tk.Frame(self.root, bg=self.colors["white"], height=100)
-        frame_header.pack(side="top", fill="x")
-        frame_header.pack_propagate(False)
+        # Cabeçalho de Luxo
+        self.header = tk.Frame(self.root, bg=self.colors["header_bg"], height=100, relief="flat")
+        self.header.pack(side="top", fill="x")
+        self.header.pack_propagate(False)
+        
+        # Borda inferior sutil do cabeçalho
+        tk.Frame(self.root, bg=self.colors["border"], height=1).pack(side="top", fill="x")
         
         try:
-            # Tenta carregar o logo embutido
+            # Carrega o logo ORIGINAL e SHARP
             logo_img = Image.open(resource_path("logo_ecowave.png"))
-            # Redimensiona mantendo proporção (ex: altura 60px)
+            # Altura ideal para o cabeçalho
+            target_h = 70
             aspect = logo_img.width / logo_img.height
-            logo_img = logo_img.resize((int(60 * aspect), 60), Image.Resampling.LANCZOS)
+            logo_img = logo_img.resize((int(target_h * aspect), target_h), Image.Resampling.LANCZOS)
             self.logo_tk = ImageTk.PhotoImage(logo_img)
             
-            lbl_logo = tk.Label(frame_header, image=self.logo_tk, bg=self.colors["white"])
-            lbl_logo.pack(side="left", padx=20, pady=10)
+            lbl_logo = tk.Label(self.header, image=self.logo_tk, bg=self.colors["header_bg"])
+            lbl_logo.pack(side="left", padx=30, pady=15)
         except:
-            # Fallback se o logo sumir
-            tk.Label(frame_header, text="eco", font=("Arial", 32, "bold"), fg=self.colors["primary"], bg=self.colors["white"]).pack(side="left", padx=(20, 0))
-            tk.Label(frame_header, text="wave", font=("Arial", 32, "bold"), fg=self.colors["secondary"], bg=self.colors["white"]).pack(side="left")
+            # Fallback elegante (Texto se o logo falhar)
+            tk.Label(self.header, text="ECOWAVE PRO", font=("Arial", 28, "bold"), fg=self.colors["primary"], bg=self.colors["header_bg"]).pack(side="left", padx=30)
         
-        lbl_title = tk.Label(frame_header, text="Renomeador Profissional", font=("", 16, "bold"), fg=self.colors["text"], bg=self.colors["white"])
-        lbl_title.pack(side="right", padx=20)
+        lbl_info = tk.Label(self.header, text=f"v{VERSION} | Enterprise Edition", font=("", 10, "bold"), fg="#6c757d", bg=self.colors["header_bg"])
+        lbl_info.pack(side="right", padx=30)
 
         notebook = ttk.Notebook(self.root)
-        notebook.pack(fill="both", expand=True)
+        notebook.pack(fill="both", expand=True, padx=10, pady=10)
         
         frame_img = ttk.Frame(notebook)
-        notebook.add(frame_img, text="📸 Imagens (Renomear e Comprimir)")
+        notebook.add(frame_img, text="📸 GESTÃO DE IMAGENS")
         
         frame_pdf = ttk.Frame(notebook)
-        notebook.add(frame_pdf, text="📄 PDFs (Juntar e Comprimir)")
+        notebook.add(frame_pdf, text="📄 GESTÃO DE PDFS")
         
         self.create_img_widgets(frame_img)
         self.create_pdf_widgets(frame_pdf)
         
-        # Barra de Status inferior com Versão e Atualização
-        frame_status = ttk.Frame(self.root, padding="5")
-        frame_status.pack(side="bottom", fill="x")
+        # Status Bar Estilizada
+        self.status_bar = tk.Frame(self.root, bg="#f1f3f5", height=30)
+        self.status_bar.pack(side="bottom", fill="x")
         
-        ttk.Label(frame_status, text=f"Versão {VERSION}", font=("", 9)).pack(side="left", padx=10)
-        ttk.Button(frame_status, text="Verificar Atualização", command=self.check_for_updates, style="Small.TButton").pack(side="right", padx=10)
+        tk.Label(self.status_bar, text=f"Aguardando ação em {platform.system()}...", font=("", 9), bg="#f1f3f5", fg="#495057").pack(side="left", padx=20)
+        ttk.Button(self.status_bar, text="Verificar Atualização", command=self.check_for_updates, style="Small.TButton").pack(side="right", padx=10, pady=2)
         
-        # Estilo para o botão menor
         style = ttk.Style()
         style.configure("Small.TButton", font=("", 8))
 
