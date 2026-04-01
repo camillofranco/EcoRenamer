@@ -1,6 +1,6 @@
 {
-    "version": "1.2.0",
+    "version": "1.2.1",
     "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases",
     "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases",
-    "changelog": "Versão inicial com Drag&Drop, Threading e tamanhos de imagem."
+    "changelog": "Botão 'Limpar Tabela' e correções no Drag & Drop."
 }

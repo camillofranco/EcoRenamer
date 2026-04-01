@@ -12,7 +12,7 @@ import webbrowser
 import json
 import urllib.request
 
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
@@ -111,7 +111,10 @@ class ToolApp:
         ttk.Checkbutton(frame_top, text="Comprimir Fotos (Funciona p/ Windows e Mac)", variable=self.compress_var).grid(row=4, column=0, columnspan=2, sticky="w", pady=8)
         
         btn_load = ttk.Button(frame_top, text="1. Carregar Prévia do Mapeamento", command=self.load_data)
-        btn_load.grid(row=5, column=0, columnspan=3, pady=15, sticky="ew")
+        btn_load.grid(row=5, column=0, columnspan=2, pady=15, sticky="ew")
+        
+        btn_clear_table = ttk.Button(frame_top, text="Limpar Tabela", command=self.reset_preview)
+        btn_clear_table.grid(row=5, column=2, pady=15, padx=(5, 0), sticky="ew")
         
         frame_mid = ttk.Frame(parent, padding="15")
         frame_mid.grid(row=1, column=0, sticky="nsew")
@@ -213,11 +216,13 @@ class ToolApp:
         item = self.tree.identify_row(event.y)
         if item:
             self.drag_data["item"] = item
+            self.tree.config(cursor="hand2")
 
     def on_drag_motion(self, event):
         pass # Poderia adicionar um indicador visual aqui
 
     def on_drag_drop(self, event):
+        self.tree.config(cursor="")
         if not self.drag_data["item"]:
             return
             
@@ -225,7 +230,6 @@ class ToolApp:
         source_item = self.drag_data["item"]
         
         if target_item and target_item != source_item:
-            # Pegar indices reais no mapping
             source_idx = self.tree.index(source_item)
             target_idx = self.tree.index(target_item)
             
@@ -239,56 +243,25 @@ class ToolApp:
         self.drag_data["item"] = None
 
     def update_mapping_after_reorder(self):
-        # Se temos Excel, precisamos manter os nomes vindos do excel na ordem da tabela
-        # No load_data original, associamos a imagem [i] ao excel [i].
-        # Se o usuário arrasta a imagem, ele quer que AQUELA imagem receba o nome que está naquela posição.
-        # OU ele quer arrastar a linha inteira (imagem + nome)? 
-        # Geralmente em vistoria, o usuário quer mudar a ORDEM das fotos para bater com a ordem do relatório.
-        # Então a imagem muda de posição, mas o "Novo Nome" segue a sequência (1, 2, 3...).
+        # Em vistorias, a ordem do Excel (destino) é geralmente fixa por posição.
+        # Se o usuário arrasta a foto, ele quer mudar QUAL foto vai para aquela posição do Excel.
+        # Portanto, mantemos a lista de 'img_val' originais (que guardamos no mapping).
+        # Na verdade, o mais simples é: cada posição 'i' na tabela corresponde ao 'Novo Nome' do item 'i' original.
         
-        excel_path = self.excel_file.get()
-        excel_names = []
+        # Vamos coletar todos os 'target_base' disponíveis na ordem original
+        # mas como eles podem ter sido carregados de forma diferente, 
+        # o ideal é ter guardado a lista de nomes destino originais no momento do load_data.
         
-        if excel_path:
-            # Precisamos extrair novamente a lista de nomes do excel para reatribuir
-            # Para simplificar, vou assumir que o usuário quer que a ordem do excel seja SOBERANA às posições.
-            # Mas se ele arrastou, ele quer trocar a foto de "lugar" no excel.
-            # Então pegamos os 'new_name' atuais na ordem original e reatribuímos? 
-            # Não, vamos salvar os nomes destino originais antes de reordenar o mapping se necessário.
-            pass
-            
-        # Refazer a lógica de nomes baseada na nova ordem de self.mapping
+        if not hasattr(self, 'original_dest_bases') or not self.original_dest_bases:
+            return
+
         digitos = self.digits.get()
-        start_no = self.start_number.get()
-        
-        # Se não tem excel, é só sequência. Se tem, a coluna "IMG" manda.
-        # No load_data, pegamos a lista de valores da coluna IMG.
-        # Vamos recuperar essa lista de valores para reatribuir.
-        
-        img_values = []
-        if excel_path:
-            try:
-                wb = openpyxl.load_workbook(excel_path, data_only=True)
-                sheet = wb.active
-                img_col_idx = None
-                for col_idx in range(1, sheet.max_column + 1):
-                    val = sheet.cell(row=1, column=col_idx).value
-                    if val and str(val).strip().upper() == "IMG":
-                        img_col_idx = col_idx
-                        break
-                if img_col_idx:
-                    for row_idx in range(2, sheet.max_row + 1):
-                        if row_idx in sheet.row_dimensions and sheet.row_dimensions[row_idx].hidden: continue
-                        val = sheet.cell(row=row_idx, column=img_col_idx).value
-                        if val is not None: img_values.append(val)
-            except: pass
-        else:
-            img_values = [str(start_no + i) for i in range(len(self.mapping))]
+        folder = self.img_folder.get()
+        compress = self.compress_var.get()
 
         for i, item in enumerate(self.mapping):
-            if i < len(img_values):
-                img_val_str = str(img_values[i]).strip()
-                if img_val_str.endswith(".0"): img_val_str = img_val_str[:-2]
+            if i < len(self.original_dest_bases):
+                img_val_str = self.original_dest_bases[i]
                 
                 if img_val_str.isdigit():
                     novo_base = img_val_str.zfill(digitos)
@@ -296,12 +269,11 @@ class ToolApp:
                     novo_base = img_val_str
                 
                 _, ext = os.path.splitext(item['orig_name'])
-                if self.compress_var.get():
+                if compress:
                     item['new_name'] = f"{novo_base}.JPG"
                 else:
                     item['new_name'] = f"{novo_base}{ext.upper()}"
                 
-                folder = self.img_folder.get()
                 item['new_path'] = os.path.join(folder, item['new_name'])
 
         # Atualizar Treeview
@@ -401,6 +373,7 @@ class ToolApp:
             excel_img_values = [str(start_no + i) for i in range(qtd_pares)]
             
         self.mapping = []
+        self.original_dest_bases = [] # Salvar para reordenação rápida
         digitos = self.digits.get()
         seen_targets = set()
         duplicados = set()
@@ -417,6 +390,8 @@ class ToolApp:
                 novo_base = img_val_str.zfill(digitos)
             else:
                 novo_base = img_val_str
+                
+            self.original_dest_bases.append(img_val_str) # Guarda o valor base sem preenchimento de zeros fixo
                 
             _, ext = os.path.splitext(orig_name)
             if self.compress_var.get():
