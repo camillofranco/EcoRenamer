@@ -7,6 +7,10 @@ from PIL import Image, ImageOps
 import fitz  # PyMuPDF para juntar PDFs
 import threading
 import math
+import platform
+import zipfile
+import shutil
+import subprocess
 
 import webbrowser
 import json
@@ -190,20 +194,73 @@ class ToolApp:
     # ------------------ UTILITÁRIOS ------------------
     def check_for_updates(self):
         try:
-            # Tenta pegar o JSON de versão do GitHub
             with urllib.request.urlopen(UPDATE_URL, timeout=5) as response:
                 data = json.loads(response.read().decode())
                 remote_version = data.get("version", VERSION)
+                changelog = data.get("changelog", "Melhorias gerais.")
                 
-                # Comparação simples de string (ex: "1.2.1" > "1.2.0")
                 if remote_version > VERSION:
-                    msg = f"Uma nova versão ({remote_version}) está disponível!\n\nDeseja abrir a página de download?"
+                    # Encontrar URL correta para o SO atual
+                    os_name = platform.system()
+                    if os_name == "Darwin":
+                        download_url = data.get("download_url_mac")
+                    else:
+                        download_url = data.get("download_url_win")
+
+                    msg = f"Uma nova versão ({remote_version}) está disponível!\n\n📋 O que mudou:\n{changelog}\n\nDeseja atualizar agora automaticamente?"
+                    
                     if messagebox.askyesno("Atualização Disponível", msg):
-                        webbrowser.open(REFS_URL)
+                        if download_url and "/releases/download/" in download_url:
+                            # Tenta baixar e "instalar" (abrir o novo)
+                            threading.Thread(target=self.run_auto_update, args=(download_url, remote_version), daemon=True).start()
+                        else:
+                            # Caso não tenha URL direta, abre o site
+                            webbrowser.open(REFS_URL)
                 else:
                     messagebox.showinfo("Atualizado", f"Você já está usando a versão mais recente ({VERSION}).")
         except Exception as e:
             messagebox.showerror("Erro", f"Não foi possível verificar atualizações:\n{e}")
+
+    def run_auto_update(self, url, version):
+        try:
+            # Pasta de destino temporária
+            home = os.path.expanduser("~")
+            temp_dir = os.path.join(home, "Downloads", f"EcoRenamer_Update_{version}")
+            if os.path.exists(temp_dir): shutil.rmtree(temp_dir)
+            os.makedirs(temp_dir)
+            
+            zip_path = os.path.join(temp_dir, "update.zip")
+            
+            # 1. Download
+            self.root.after(0, lambda: messagebox.showinfo("Baixando", "A atualização está sendo baixada. Isso pode levar alguns segundos..."))
+            urllib.request.urlretrieve(url, zip_path)
+            
+            # 2. Extração
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(temp_dir)
+            
+            os.remove(zip_path) # Limpa o zip
+            
+            # 3. Informar e Abrir
+            msg_fin = (f"Atualização baixada com sucesso em:\n{temp_dir}\n\n"
+                       "A pasta com a nova versão será aberta agora. "
+                       "Você pode fechar esta versão antiga e usar a nova!")
+            
+            self.root.after(0, lambda: messagebox.showinfo("Sucesso", msg_fin))
+            
+            # Abrir pasta/arquivo
+            if platform.system() == "Darwin":
+                subprocess.run(["open", temp_dir])
+            else:
+                os.startfile(temp_dir)
+                
+            # Fecha o app atual opcionalmente? 
+            # Melhor deixar o usuário fechar pra ele não perder o que estava fazendo
+            # mas vamos dar a dica.
+            
+        except Exception as e:
+            self.root.after(0, lambda: messagebox.showerror("Erro no Download", f"Falha ao baixar atualização automática:\n{e}\n\nTentando abrir página manual..."))
+            self.root.after(0, lambda: webbrowser.open(REFS_URL))
 
     def format_size(self, size_bytes):
         if size_bytes >= 1024 * 1024:
