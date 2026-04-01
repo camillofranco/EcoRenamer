@@ -584,42 +584,35 @@ class ToolApp:
         self.lbl_perc.config(text="0%")
         self.lbl_status.config(text="Iniciando processamento paralelo...")
         
-        threading.Thread(target=self.run_rename_task_parallel, daemon=True).start()
+        threading.Thread(target=self.run_rename_task_robust, daemon=True).start()
 
-    def run_rename_task_parallel(self):
+    def run_rename_task_robust(self):
         sucessos = 0
         falhas = 0
         erros_msg = []
+        mapping_snapshot = list(self.mapping) # Copia seguranca
+        total = len(mapping_snapshot)
         
-        total = len(self.mapping)
-        
-        # Usamos ThreadPoolExecutor para processar imagens paralelamente
-        # No Mac, o limitador costuma ser CPU para compressão e I/O
-        # max_workers=None usa núcleos disponíveis
+        # Fase 1: Trabalho Paralelo
         with ThreadPoolExecutor() as executor:
-            # Envia tarefas
             futures = []
-            for idx, item in enumerate(self.mapping):
+            for idx, item in enumerate(mapping_snapshot):
                 futures.append(executor.submit(self.process_single_image, item, idx))
                 
-            # Coleta resultados
             for i, future in enumerate(futures):
                 res_ok, res_msg = future.result()
-                if res_ok:
-                    sucessos += 1
+                if res_ok: sucessos += 1
                 else:
                     falhas += 1
                     erros_msg.append(res_msg)
                 
-                # Atualiza UI
                 perc = int(((i + 1) / total) * 100)
-                status_txt = f"Processando {i+1} de {total}..."
-                if i < total - 1:
-                    status_txt += f" (Atual: {self.mapping[i+1]['orig_name']})"
-                
-                self.root.after(0, lambda v=i+1, p=perc, s=status_txt: self.update_ui_progress(v, p, s))
+                self.update_ui_progress(i + 1, perc, f"Fase 1/2: Criando temporários ({i+1}/{total})")
 
-        # Finaliza na interface
+        # Fase 2: Cleanup e Rename Final (Sequencial p/ evitar lock)
+        self.lbl_status.config(text="Fase 2/2: Finalizando renomeação física...")
+        self.perform_final_cleanup(mapping_snapshot)
+
         self.root.after(0, lambda: self.finish_rename(sucessos, falhas, erros_msg))
 
     def update_ui_progress(self, val, perc, status):
@@ -627,10 +620,26 @@ class ToolApp:
         self.lbl_perc.config(text=f"{perc}%")
         self.lbl_status.config(text=status)
 
+    def perform_final_cleanup(self, mapping):
+        """Fase 2: Substitui os originais pelos novos arquivos temporários"""
+        for item in mapping:
+            temp_path = item['new_path'] + ".ecotmp"
+            if os.path.exists(temp_path):
+                try:
+                    if os.path.exists(item['orig_path']):
+                        os.remove(item['orig_path'])
+                    
+                    # Se o destino já existe (e não é o mesmo que acabamos de apagar), removemos
+                    if os.path.exists(item['new_path']):
+                        os.remove(item['new_path'])
+                        
+                    os.rename(temp_path, item['new_path'])
+                except Exception as e:
+                    print(f"Erro no cleanup de {item['new_name']}: {e}")
+
     def process_single_image(self, item, index):
-        """Função executada em thread separada para cada imagem"""
-        if os.path.exists(item['new_path']) and item['orig_path'] != item['new_path']:
-            return False, f"{item['orig_name']} -> O destino {item['new_name']} já existe."
+        """Função executada em thread separada p/ imagem (Fase 1: Trabalho em .ecotmp)"""
+        temp_target = item['new_path'] + ".ecotmp"
         
         try:
             if self.compress_var.get():
@@ -638,21 +647,11 @@ class ToolApp:
                 img = ImageOps.exif_transpose(img)
                 img.thumbnail((800, 800), Image.Resampling.LANCZOS)
                 img = img.convert("RGB")
-                
-                if item['orig_path'] == item['new_path']:
-                    temp_path = item['orig_path'] + "_temp.jpg"
-                    img.save(temp_path, "JPEG", optimize=True, quality=45)
-                    img.close()
-                    os.remove(item['orig_path'])
-                    os.rename(temp_path, item['new_path'])
-                else:
-                    img.save(item['new_path'], "JPEG", optimize=True, quality=45)
-                    img.close()
-                    os.remove(item['orig_path'])
+                img.save(temp_target, "JPEG", optimize=True, quality=45)
+                img.close()
             else:
-                if item['orig_path'] != item['new_path']:
-                    shutil.copy2(item['orig_path'], item['new_path']) # Usamos copy2 e depois remove p/ segurança
-                    os.remove(item['orig_path'])
+                # Mesmo sem comprimir, usamos o .ecotmp para evitar colisões de nome imediata
+                shutil.copy2(item['orig_path'], temp_target)
             return True, ""
         except Exception as e:
             return False, f"{item['orig_name']}: {str(e)}"
