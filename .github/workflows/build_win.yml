@@ -26,9 +26,8 @@ jobs:
         pyinstaller --noconfirm --windowed --noconsole --name "RenomeadorApp" --icon "icon.ico" --collect-all customtkinter --add-data "logo_ecowave.png;." renomeador.py
         
     - name: Compile Inno Setup Script
-      uses: minicomp/iscc-action@v3
-      with:
-        iss-file: 'instalador_win.iss'
+      run: |
+        "C:\Program Files (x86)\Inno Setup 6\iscc.exe" instalador_win.iss
         
     - name: Upload Installer Artifact
       uses: actions/upload-artifact@v4
