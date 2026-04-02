@@ -1054,21 +1054,46 @@ class ToolApp:
         try: self.btn_load.configure(state="disabled")
         except: pass
         self.frame_progress.pack(fill="x", pady=10)
-        self.lbl_status.configure(text=f"Abaixando pacote v{version} (Em Background)...")
-        self.progress.set(0.3)
-        self.lbl_perc.configure(text="30%")
+        self.lbl_status.configure(text=f"Preparando download da v{version}...")
+        self.progress.set(0)
+        self.lbl_perc.configure(text="0%")
         
         try:
+            # Bypass de SSL para evitar erros de certificado no Mac
+            import ssl
+            context = ssl._create_unverified_context()
+            
             temp_dir = os.path.join(os.path.expanduser("~"), ".ecowave_update_tmp")
             if os.path.exists(temp_dir): shutil.rmtree(temp_dir)
             os.makedirs(temp_dir)
             
             zpath = os.path.join(temp_dir, "u.zip")
-            urllib.request.urlretrieve(url, zpath)
             
-            self.lbl_status.configure(text="Pré-Instalando e Descompactando...")
-            self.progress.set(0.8)
-            with zipfile.ZipFile(zpath, 'r') as zf: zf.extractall(temp_dir)
+            # Função de callback para progresso real
+            def progress_hook(count, block_size, total_size):
+                if total_size > 0:
+                    perc = (count * block_size) / total_size
+                    if perc > 1.0: perc = 1.0
+                    self.root.after(0, lambda: (
+                        self.progress.set(perc),
+                        self.lbl_perc.configure(text=f"{int(perc*100)}%"),
+                        self.lbl_status.configure(text=f"Baixando atualização... ({self.format_size(count*block_size)} / {self.format_size(total_size)})")
+                    ))
+
+            # Custom Opener para usar o contexto SSL
+            opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=context))
+            urllib.request.install_opener(opener)
+            
+            self.root.after(0, lambda: self.lbl_status.configure(text="Iniciando download seguro com GitHub..."))
+            urllib.request.urlretrieve(url, zpath, reporthook=progress_hook)
+            
+            self.root.after(0, lambda: (
+                self.lbl_status.configure(text="Descompactando pacote de atualização..."),
+                self.progress.set(0.9)
+            ))
+            
+            with zipfile.ZipFile(zpath, 'r') as zf: 
+                zf.extractall(temp_dir)
             
             # Bloqueio caso seja rodado via Python Raw
             is_frozen = getattr(sys, 'frozen', False)
