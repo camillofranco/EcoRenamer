@@ -15,6 +15,9 @@ import webbrowser
 import json
 import urllib.request
 import sys
+import base64
+import re
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 import pdfplumber
 from pdf2docx import Converter
@@ -22,7 +25,14 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import landscape, A4
 
-VERSION = "1.4.4" # Warning amigável para Errno 89 (Nuvem)
+# Import opcional do Tesseract OCR (necessário para PDFs escaneados)
+try:
+    import pytesseract as _pytesseract_module
+    _PYTESSERACT_OK = True
+except ImportError:
+    _PYTESSERACT_OK = False
+
+VERSION = "1.4.5" # Versão estável sem IA
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
@@ -68,8 +78,10 @@ class ToolApp:
         self.pdf_output_name = ctk.StringVar(value="Documento_Unificado.pdf")
         self.pdf_sort_order = ctk.StringVar(value="Crescente (A-Z)")
         self.processing = False
+        self.pdf_files = []  # Lista de PDFs para merge
         
         self.create_widgets()
+
         
     def create_widgets(self):
         # 1. HEADER (Cabeçalho Branco Puro)
@@ -99,11 +111,9 @@ class ToolApp:
                                       segmented_button_selected_hover_color="#1B5E20")
         self.tabview.pack(fill="both", expand=True, padx=20, pady=20)
         
-        self.tabview.add("📸  GESTÃO DE IMAGENS")
-        self.tabview.add("📄  GESTÃO DE PDFS")
-        self.tabview.add("🛠️ UTILITÁRIOS")
-        
         self.create_img_tab(self.tabview.tab("📸  GESTÃO DE IMAGENS"))
+        self.tabview.tab("📄  GESTÃO DE PDFS").columnconfigure(0, weight=1)
+        self.tabview.tab("📄  GESTÃO DE PDFS").rowconfigure(1, weight=1)
         self.create_pdf_tab(self.tabview.tab("📄  GESTÃO DE PDFS"))
         self.create_utils_tab(self.tabview.tab("🛠️ UTILITÁRIOS"))
         
@@ -221,162 +231,476 @@ class ToolApp:
 
     def create_pdf_tab(self, parent):
         parent.columnconfigure(0, weight=1)
-        
+        parent.rowconfigure(1, weight=1)
+
+        # --- Controles superiores ---
         frame_top = ctk.CTkFrame(parent, fg_color="transparent")
-        frame_top.grid(row=0, column=0, sticky="ew", pady=20)
+        frame_top.grid(row=0, column=0, sticky="ew", pady=(0, 5))
         frame_top.columnconfigure(1, weight=1)
-        
-        ctk.CTkLabel(frame_top, text="PASTA COM PDFs:", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, sticky="w", pady=10)
-        ctk.CTkEntry(frame_top, textvariable=self.pdf_folder, state="readonly", height=40).grid(row=0, column=1, sticky="ew", padx=15, pady=10)
-        ctk.CTkButton(frame_top, text="Selecionar", command=self.select_pdf_folder, fg_color=self.c_secondary, height=40).grid(row=0, column=2, pady=10)
-        
-        ctk.CTkLabel(frame_top, text="NOME DO ARQUIVO FINAL:", font=ctk.CTkFont(weight="bold")).grid(row=1, column=0, sticky="w", pady=10)
-        ctk.CTkEntry(frame_top, textvariable=self.pdf_output_name, height=40).grid(row=1, column=1, columnspan=2, sticky="ew", padx=(15,0), pady=10)
-        
-        ctk.CTkButton(parent, text="UNIFICAR E COMPRIMIR PDFs", command=self.merge_pdfs,
-                      fg_color=self.c_primary, text_color="white", font=ctk.CTkFont(size=16, weight="bold"), height=60, corner_radius=8).grid(row=1, column=0, pady=40, sticky="ew")
+
+        ctk.CTkLabel(frame_top, text="NOME DO ARQUIVO FINAL:", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, sticky="w", pady=8)
+        ctk.CTkEntry(frame_top, textvariable=self.pdf_output_name, height=36).grid(row=0, column=1, sticky="ew", padx=10, pady=8)
+
+        frame_btns = ctk.CTkFrame(frame_top, fg_color="transparent")
+        frame_btns.grid(row=0, column=2, sticky="e")
+        ctk.CTkButton(frame_btns, text="+ Adicionar PDFs", command=self.pdf_add_files, fg_color=self.c_secondary, hover_color="#311B92", height=36).pack(side="left", padx=(0,5))
+        ctk.CTkButton(frame_btns, text="Limpar Lista", command=self.pdf_clear_list, fg_color="gray40", hover_color="gray25", height=36).pack(side="left")
+
+        # --- TreeView de PDFs ---
+        frame_tree = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_tree.grid(row=1, column=0, sticky="nsew", pady=8)
+        frame_tree.columnconfigure(0, weight=1)
+        frame_tree.rowconfigure(0, weight=1)
+
+        style = ttk.Style()
+        style.configure("PDF.Treeview",
+                        rowheight=32, font=("Helvetica", 11),
+                        background="#ffffff" if ctk.get_appearance_mode() == "Light" else "#2b2b2b",
+                        foreground="#000000" if ctk.get_appearance_mode() == "Light" else "#ffffff",
+                        fieldbackground="#ffffff" if ctk.get_appearance_mode() == "Light" else "#2b2b2b")
+        style.configure("PDF.Treeview.Heading", font=("Helvetica", 11, "bold"),
+                        background=self.c_primary, foreground="white")
+        style.map("PDF.Treeview", background=[("selected", self.c_secondary)])
+
+        pdf_cols = ("pos", "nome", "tamanho")
+        self.pdf_tree = Treeview(frame_tree, columns=pdf_cols, show="headings", selectmode="browse", style="PDF.Treeview")
+        self.pdf_tree.heading("pos", text="#")
+        self.pdf_tree.heading("nome", text="ARQUIVO")
+        self.pdf_tree.heading("tamanho", text="TAMANHO")
+        self.pdf_tree.column("pos", width=50, anchor="center")
+        self.pdf_tree.column("nome", anchor="w")
+        self.pdf_tree.column("tamanho", width=100, anchor="center")
+
+        self.pdf_tree.bind("<ButtonPress-1>", self.pdf_drag_start)
+        self.pdf_tree.bind("<B1-Motion>", self.pdf_drag_motion)
+        self.pdf_tree.bind("<ButtonRelease-1>", self.pdf_drag_drop)
+        self.pdf_drag_data = {"item": None}
+
+        pdf_scroll = ctk.CTkScrollbar(frame_tree, command=self.pdf_tree.yview)
+        self.pdf_tree.configure(yscroll=pdf_scroll.set)
+        self.pdf_tree.grid(row=0, column=0, sticky="nsew")
+        pdf_scroll.grid(row=0, column=1, sticky="ns")
+
+        # Botões de reordenar
+        frame_order = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_order.grid(row=2, column=0, sticky="ew", pady=(0, 5))
+        ctk.CTkButton(frame_order, text="⬆ Subir", command=self.pdf_move_up, fg_color="gray40", hover_color="gray25", width=100).pack(side="left", padx=(0,5))
+        ctk.CTkButton(frame_order, text="⬇ Descer", command=self.pdf_move_down, fg_color="gray40", hover_color="gray25", width=100).pack(side="left")
+
+        # --- Botão e Progresso ---
+        frame_bot = ctk.CTkFrame(parent, fg_color="transparent")
+        frame_bot.grid(row=3, column=0, sticky="ew", pady=(5, 0))
+
+        self.pdf_merge_btn = ctk.CTkButton(frame_bot, text="UNIFICAR E COMPRIMIR PDFs", command=self.merge_pdfs,
+                      fg_color=self.c_primary, text_color="white", font=ctk.CTkFont(size=15, weight="bold"), height=50, corner_radius=8)
+        self.pdf_merge_btn.pack(fill="x")
+
+        self.pdf_progress_frame = ctk.CTkFrame(frame_bot, fg_color="transparent")
+        self.pdf_status_lbl = ctk.CTkLabel(self.pdf_progress_frame, text="Aguardando...", font=ctk.CTkFont(weight="bold"))
+        self.pdf_status_lbl.pack(anchor="w", pady=(8,0))
+        self.pdf_progress = ctk.CTkProgressBar(self.pdf_progress_frame, mode="determinate", progress_color=self.c_primary, height=18)
+        self.pdf_progress.set(0)
+        self.pdf_progress.pack(fill="x", pady=4)
+        self.pdf_perc_lbl = ctk.CTkLabel(self.pdf_progress_frame, text="0%", font=ctk.CTkFont(weight="bold", size=13))
+        self.pdf_perc_lbl.pack()
+
+    # ---------- PDF TAB helpers ----------
+    def pdf_add_files(self):
+        files = filedialog.askopenfilenames(title="Selecione os PDFs", filetypes=[("PDF files", "*.pdf")])
+        for f in files:
+            if f not in [p['path'] for p in self.pdf_files]:
+                size = os.path.getsize(f)
+                self.pdf_files.append({'path': f, 'name': os.path.basename(f), 'size': size})
+        self._refresh_pdf_tree()
+
+    def pdf_clear_list(self):
+        self.pdf_files.clear()
+        self._refresh_pdf_tree()
+
+    def _refresh_pdf_tree(self):
+        for item in self.pdf_tree.get_children():
+            self.pdf_tree.delete(item)
+        for i, p in enumerate(self.pdf_files):
+            size_str = self.format_size(p['size'])
+            self.pdf_tree.insert("", "end", values=(i+1, p['name'], size_str))
+
+    def pdf_drag_start(self, event):
+        item = self.pdf_tree.identify_row(event.y)
+        if item:
+            self.pdf_drag_data["item"] = item
+            self.pdf_tree.config(cursor="hand2")
+
+    def pdf_drag_motion(self, event):
+        pass
+
+    def pdf_drag_drop(self, event):
+        self.pdf_tree.config(cursor="")
+        if not self.pdf_drag_data["item"]: return
+        target = self.pdf_tree.identify_row(event.y)
+        src = self.pdf_drag_data["item"]
+        if target and target != src:
+            si = self.pdf_tree.index(src)
+            ti = self.pdf_tree.index(target)
+            item = self.pdf_files.pop(si)
+            self.pdf_files.insert(ti, item)
+            self._refresh_pdf_tree()
+        self.pdf_drag_data["item"] = None
+
+    def pdf_move_up(self):
+        sel = self.pdf_tree.selection()
+        if not sel: return
+        idx = self.pdf_tree.index(sel[0])
+        if idx > 0:
+            self.pdf_files[idx], self.pdf_files[idx-1] = self.pdf_files[idx-1], self.pdf_files[idx]
+            self._refresh_pdf_tree()
+            new_item = self.pdf_tree.get_children()[idx-1]
+            self.pdf_tree.selection_set(new_item)
+
+    def pdf_move_down(self):
+        sel = self.pdf_tree.selection()
+        if not sel: return
+        idx = self.pdf_tree.index(sel[0])
+        if idx < len(self.pdf_files) - 1:
+            self.pdf_files[idx], self.pdf_files[idx+1] = self.pdf_files[idx+1], self.pdf_files[idx]
+            self._refresh_pdf_tree()
+            new_item = self.pdf_tree.get_children()[idx+1]
+            self.pdf_tree.selection_set(new_item)
 
     def create_utils_tab(self, parent):
+        # Frame scrollável para os cards
         parent.columnconfigure(0, weight=1)
         parent.columnconfigure(1, weight=1)
-        
-        lbl = ctk.CTkLabel(parent, text="CAIXA DE FERRAMENTAS AVANÇADAS", font=ctk.CTkFont(size=20, weight="bold"), text_color=self.c_primary)
-        lbl.grid(row=0, column=0, columnspan=2, pady=(20, 30))
-        
-        def wrapper(func):
-            def _inner():
-                threading.Thread(target=func, daemon=True).start()
-            return _inner
-            
-        def build_card(col, row, icon, title, desc, btn_text, command_func):
-            frame = ctk.CTkFrame(parent, corner_radius=15, fg_color="transparent", border_width=2, border_color="gray80")
-            frame.grid(row=row, column=col, padx=15, pady=15, sticky="ew")
-            
-            ctk.CTkLabel(frame, text=icon, font=ctk.CTkFont(size=36)).pack(pady=(15,0))
-            ctk.CTkLabel(frame, text=title, font=ctk.CTkFont(size=16, weight="bold")).pack(pady=5)
-            ctk.CTkLabel(frame, text=desc, font=ctk.CTkFont(size=12), text_color="gray", wraplength=300, justify="center").pack(pady=(0,15), padx=10)
-            
-            btn = ctk.CTkButton(frame, text=btn_text, command=wrapper(command_func), 
-                                fg_color=self.c_secondary, hover_color="#311B92", font=ctk.CTkFont(weight="bold"))
-            btn.pack(pady=(0, 20), padx=20, fill="x")
+
+        ctk.CTkLabel(parent, text="CAIXA DE FERRAMENTAS AVANÇADAS",
+                     font=ctk.CTkFont(size=20, weight="bold"), text_color=self.c_primary
+                     ).grid(row=0, column=0, columnspan=2, pady=(15, 20))
+
+        # Cada card tem: status_label próprio + botão que roda diálogo na main thread
+        def build_card(col, row, icon, title, desc, btn_text, cmd):
+            frame = ctk.CTkFrame(parent, corner_radius=15, fg_color="transparent",
+                                 border_width=2, border_color="gray70")
+            frame.grid(row=row, column=col, padx=12, pady=10, sticky="nsew")
+            ctk.CTkLabel(frame, text=icon, font=ctk.CTkFont(size=32)).pack(pady=(12,0))
+            ctk.CTkLabel(frame, text=title, font=ctk.CTkFont(size=15, weight="bold")).pack(pady=4)
+            ctk.CTkLabel(frame, text=desc, font=ctk.CTkFont(size=11), text_color="gray",
+                         wraplength=280, justify="center").pack(pady=(0,10), padx=10)
+            status = ctk.CTkLabel(frame, text="⏳ Aguardando...",
+                                  font=ctk.CTkFont(size=11), text_color="gray")
+            status.pack(pady=(0,6))
+            prog = ctk.CTkProgressBar(frame, mode="determinate",
+                                      progress_color=self.c_primary, height=8)
+            prog.set(0)
+            prog.pack(fill="x", padx=16, pady=(0,8))
+            btn = ctk.CTkButton(frame, text=btn_text, command=lambda c=cmd, s=status, p=prog: c(s, p),
+                                fg_color=self.c_secondary, hover_color="#311B92",
+                                font=ctk.CTkFont(weight="bold"))
+            btn.pack(pady=(0,16), padx=16, fill="x")
             return frame
 
-        build_card(0, 1, "🔤", "PDF para Word", "Transforme documentos PDF em texto editável .docx nativo do Word.", "Converter PDF -> Word", self.do_pdf_to_word)
-        build_card(1, 1, "📊", "Excel para PDF", "Transforme tabelas do Excel em relatórios limpos no formato PDF.", "Converter Excel -> PDF", self.do_excel_to_pdf)
-        build_card(0, 2, "📑", "PDF para Excel", "Extraia tabelas brutas de um arquivo PDF e salve no formato Excel.", "Extrair para Excel", self.do_pdf_to_excel)
-        build_card(1, 2, "🖼️", "JPG para PDF", "Selecione múltiplas fotos (JPG/PNG) para unir num arquivo PDF.", "Unir Fotos em PDF", self.do_jpg_to_pdf)
-        build_card(0, 3, "✂️", "Dividir PDF", "Separe as páginas de um PDF denso em arquivos independentes.", "Separar Páginas", self.do_split_pdf)
+        build_card(0, 1, "🔤", "PDF para Word",
+                   "Converte PDF com texto real para .docx totalmente editável.",
+                   "Converter PDF → Word", self.do_pdf_to_word)
+        build_card(1, 1, "📊", "Excel para PDF",
+                   "Gera um relatório PDF bem formatado a partir de uma planilha .xlsx.",
+                   "Converter Excel → PDF", self.do_excel_to_pdf)
+        build_card(0, 2, "📑", "PDF para Excel",
+                   "Extrai tabelas de PDFs nativos e exporta os dados em Excel.",
+                   "Extrair Tabelas → Excel", self.do_pdf_to_excel)
+        build_card(1, 2, "🖼️", "Imagens para PDF",
+                   "Une múltiplas fotos JPG/PNG num único álbum PDF de alta qualidade.",
+                   "Unir Fotos → PDF", self.do_jpg_to_pdf)
+        build_card(0, 3, "✂️", "Dividir PDF",
+                   "Separa cada página de um PDF em arquivos individuais numa pasta.",
+                   "Separar Páginas", self.do_split_pdf)
 
+    # ----------- Helpers thread-safe -----------
     def _show_info(self, title, msg):
         self.root.after(0, lambda: messagebox.showinfo(title, msg))
 
     def _show_err(self, title, msg):
         self.root.after(0, lambda: messagebox.showerror(title, msg))
 
-    def do_pdf_to_word(self):
-        file = filedialog.askopenfilename(title="Selecione o PDF", filetypes=[("PDF files", "*.pdf")])
-        if not file: return
-        out = os.path.splitext(file)[0] + ".docx"
-        try:
-            cv = Converter(file)
-            cv.convert(out)
-            cv.close()
-            self._show_info("Sucesso", f"Documento Word salvo em:\n{out}")
-        except Exception as e:
-            self._show_err("Erro", f"Falha na conversão PDF -> Word:\n{e}")
+    def _set_status(self, lbl, prog, text, pval=None):
+        """Atualiza status e progresso de forma thread-safe."""
+        def _do():
+            lbl.configure(text=text)
+            if pval is not None:
+                prog.set(pval)
+        self.root.after(0, _do)
 
-    def do_excel_to_pdf(self):
-        file = filedialog.askopenfilename(title="Selecione o Excel", filetypes=[("Excel files", "*.xlsx")])
+    # ----------- Motor 1: PDF → Word -----------
+    def do_pdf_to_word(self, status_lbl, prog):
+        # Diálogo na thread PRINCIPAL
+        file = filedialog.askopenfilename(title="Selecione o PDF de origem",
+                                          filetypes=[("PDF", "*.pdf")])
         if not file: return
-        out = os.path.splitext(file)[0] + ".pdf"
+        out = filedialog.asksaveasfilename(title="Salvar Word como...",
+                                           defaultextension=".docx",
+                                           filetypes=[("Word", "*.docx")],
+                                           initialfile=os.path.splitext(os.path.basename(file))[0] + ".docx")
+        if not out: return
+        threading.Thread(target=self._bg_pdf_to_word, args=(file, out, status_lbl, prog), daemon=True).start()
+
+    def _bg_pdf_to_word(self, file, out, lbl, prog):
         try:
+            self._set_status(lbl, prog, "🔄 Analisando PDF...", 0.1)
+            # Verifica se o PDF tem texto extraível nativo
+            texto_total = ""
+            with pdfplumber.open(file) as pdf_check:
+                for pg in pdf_check.pages:
+                    texto_total += (pg.extract_text() or "")
+
+            if len(texto_total.strip()) >= 30:
+                # ── CAMINHO 1: PDF nativo com texto → pdf2docx (preserva layout)
+                self._set_status(lbl, prog, "🔄 Convertendo PDF nativo para Word...", 0.4)
+                cv = Converter(file)
+                cv.convert(out)
+                cv.close()
+            else:
+                # ── CAMINHO 2: PDF escaneado → OCR com Tesseract + python-docx
+                if not _PYTESSERACT_OK:
+                    self._set_status(lbl, prog, "❌ Tesseract não instalado!", 0.0)
+                    self._show_err("Tesseract não encontrado",
+                        "Para processar PDFs escaneados, o Tesseract OCR precisa estar instalado.\n\n"
+                        "• Mac: abra o Terminal e execute:\n  brew install tesseract tesseract-lang\n\n"
+                        "• Windows: baixe em github.com/UB-Mannheim/tesseract/wiki")
+                    return
+                self._set_status(lbl, prog, "🔍 PDF escaneado detectado! Iniciando OCR...", 0.1)
+                tess_path = shutil.which("tesseract")
+                if not tess_path:
+                    for p in ["/opt/homebrew/bin/tesseract", "/usr/local/bin/tesseract",
+                               r"C:\Program Files\Tesseract-OCR\tesseract.exe"]:
+                        if os.path.exists(p):
+                            tess_path = p
+                            break
+                if tess_path:
+                    _pytesseract_module.pytesseract.tesseract_cmd = tess_path
+                else:
+                    self._set_status(lbl, prog, "❌ Tesseract não encontrado!", 0.0)
+                    self._show_err("Tesseract não encontrado",
+                        "• Mac: brew install tesseract tesseract-lang\n"
+                        "• Windows: github.com/UB-Mannheim/tesseract/wiki")
+                    return
+
+                from docx import Document
+                from docx.shared import Pt
+                doc_word = Document()
+                doc_word.add_heading("Documento EcoRenamer OCR", level=1)
+                doc_fitz = fitz.open(file)
+                total_pgs = len(doc_fitz)
+                for i, page in enumerate(doc_fitz):
+                    perc = 0.15 + (i / total_pgs) * 0.80
+                    self._set_status(lbl, prog, f"🔍 OCR: Página {i+1}/{total_pgs}...", perc)
+                    mat = fitz.Matrix(300/72, 300/72)
+                    pix = page.get_pixmap(matrix=mat)
+                    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+                        tmp_path = tmp.name
+                    pix.save(tmp_path)
+                    pil_img = Image.open(tmp_path)
+                    try:
+                        texto_ocr = _pytesseract_module.image_to_string(pil_img, lang="por+eng")
+                    except Exception:
+                        texto_ocr = _pytesseract_module.image_to_string(pil_img, lang="eng")
+                    pil_img.close()
+                    os.remove(tmp_path)
+                    if i > 0:
+                        doc_word.add_page_break()
+                    p = doc_word.add_paragraph()
+                    run = p.add_run(texto_ocr)
+                    run.font.size = Pt(11)
+                doc_fitz.close()
+                doc_word.save(out)
+
+            self._set_status(lbl, prog, "✅ Concluído!", 1.0)
+            self._show_info("Sucesso", f"Documento Word editável salvo em:\n{out}")
+        except Exception as e:
+            self._set_status(lbl, prog, f"❌ Erro: {e}", 0.0)
+            self._show_err("Erro", f"Falha na conversão PDF → Word:\n{e}")
+
+    # ----------- Motor 2: Excel → PDF -----------
+    def do_excel_to_pdf(self, status_lbl, prog):
+        file = filedialog.askopenfilename(title="Selecione a planilha Excel",
+                                          filetypes=[("Excel", "*.xlsx")])
+        if not file: return
+        out = filedialog.asksaveasfilename(title="Salvar PDF como...",
+                                           defaultextension=".pdf",
+                                           filetypes=[("PDF", "*.pdf")],
+                                           initialfile=os.path.splitext(os.path.basename(file))[0] + ".pdf")
+        if not out: return
+        threading.Thread(target=self._bg_excel_to_pdf, args=(file, out, status_lbl, prog), daemon=True).start()
+
+    def _bg_excel_to_pdf(self, file, out, lbl, prog):
+        try:
+            self._set_status(lbl, prog, "🔄 Lendo planilha...", 0.2)
             wb = openpyxl.load_workbook(file, data_only=True)
             sheet = wb.active
             data = []
             for row in sheet.iter_rows(values_only=True):
-                data.append([str(c) if c is not None else "" for c in row])
+                cleaned = [str(c) if c is not None else "" for c in row]
+                if any(c.strip() for c in cleaned):  # pula linhas totalmente vazias
+                    data.append(cleaned)
             if not data:
-                self._show_err("Erro", "Planilha Excel parece estar vazia.")
+                self._set_status(lbl, prog, "⚠️ Planilha vazia!", 0.0)
+                self._show_err("Erro", "A planilha selecionada parece estar vazia.")
                 return
-            
-            pdf = SimpleDocTemplate(out, pagesize=landscape(A4))
-            table = Table(data)
-            style = TableStyle([
+            self._set_status(lbl, prog, "🔄 Gerando PDF...", 0.6)
+            from reportlab.lib.units import cm
+            col_count = max(len(r) for r in data)
+            # Calcula largura de coluna disponível
+            available_width = landscape(A4)[0] - 2*cm
+            col_width = available_width / col_count
+            col_widths = [col_width] * col_count
+            pdf_doc = SimpleDocTemplate(out, pagesize=landscape(A4),
+                                        leftMargin=cm, rightMargin=cm,
+                                        topMargin=cm, bottomMargin=cm)
+            table = Table(data, colWidths=col_widths, repeatRows=1)
+            table_style = TableStyle([
                 ('BACKGROUND', (0,0), (-1,0), colors.HexColor(self.c_primary)),
                 ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('ALIGN', (0,0), (-1,-1), 'LEFT'),
                 ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0,0), (-1,0), 12),
-                ('BOTTOMPADDING', (0,0), (-1,0), 12),
+                ('FONTSIZE', (0,0), (-1,0), 9),
+                ('BOTTOMPADDING', (0,0), (-1,0), 8),
+                ('TOPPADDING', (0,0), (-1,0), 8),
                 ('BACKGROUND', (0,1), (-1,-1), colors.white),
-                ('GRID', (0,0), (-1,-1), 1, colors.black),
+                ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor('#F5F5F5')]),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#CCCCCC')),
                 ('FONTNAME', (0,1), (-1,-1), 'Helvetica'),
-                ('FONTSIZE', (0,1), (-1,-1), 10),
+                ('FONTSIZE', (0,1), (-1,-1), 8),
+                ('WORDWRAP', (0,0), (-1,-1), True),
             ])
-            table.setStyle(style)
-            pdf.build([table])
+            table.setStyle(table_style)
+            pdf_doc.build([table])
+            self._set_status(lbl, prog, "✅ Concluído!", 1.0)
             self._show_info("Sucesso", f"Relatório PDF salvo em:\n{out}")
         except Exception as e:
-            self._show_err("Erro", f"Falha ao gerar PDF:\n{e}")
+            self._set_status(lbl, prog, f"❌ Erro: {e}", 0.0)
+            self._show_err("Erro", f"Falha ao gerar PDF:\n{str(e)}")
 
-    def do_pdf_to_excel(self):
-        file = filedialog.askopenfilename(title="Selecione o PDF", filetypes=[("PDF files", "*.pdf")])
+    # ----------- Motor 3: PDF → Excel -----------
+    def do_pdf_to_excel(self, status_lbl, prog):
+        file = filedialog.askopenfilename(title="Selecione o PDF com tabelas",
+                                          filetypes=[("PDF", "*.pdf")])
         if not file: return
-        out = os.path.splitext(file)[0] + "_Extraido.xlsx"
+        out = filedialog.asksaveasfilename(title="Salvar Excel como...",
+                                           defaultextension=".xlsx",
+                                           filetypes=[("Excel", "*.xlsx")],
+                                           initialfile=os.path.splitext(os.path.basename(file))[0] + "_Extraido.xlsx")
+        if not out: return
+        threading.Thread(target=self._bg_pdf_to_excel, args=(file, out, status_lbl, prog), daemon=True).start()
+
+    def _bg_pdf_to_excel(self, file, out, lbl, prog):
         try:
+            self._set_status(lbl, prog, "🔄 Analisando PDF...", 0.1)
             wb = openpyxl.Workbook()
-            sheet = wb.active
+            ws = wb.active
+            tabelas_encontradas = 0
             with pdfplumber.open(file) as pdf:
-                for page in pdf.pages:
+                total_pgs = len(pdf.pages)
+                for i, page in enumerate(pdf.pages):
+                    self._set_status(lbl, prog, f"🔄 Página {i+1}/{total_pgs}...", (i+1)/total_pgs * 0.85)
+                    # Tenta extrair tabela estruturada
                     table = page.extract_table()
                     if table:
+                        tabelas_encontradas += 1
+                        if tabelas_encontradas > 1:
+                            ws.append([])  # linha em branco entre tabelas
+                            ws.append([f"--- Página {i+1} ---"])
                         for row in table:
-                            sheet.append([str(c) if c is not None else "" for c in row])
+                            ws.append([str(c).strip() if c is not None else "" for c in row])
+                    else:
+                        # Fallback: extrai texto bruto linha a linha
+                        texto = page.extract_text()
+                        if texto:
+                            tabelas_encontradas += 1
+                            ws.append([f"--- Página {i+1} (texto) ---"])
+                            for linha in texto.split("\n"):
+                                ws.append([linha])
+            if tabelas_encontradas == 0:
+                self._set_status(lbl, prog, "⚠️ Nenhuma tabela encontrada!", 0.0)
+                self._show_err("Aviso", "Nenhum conteúdo extraível foi encontrado neste PDF.\nVerifique se ele possui texto ou tabelas nativas (não escaneado).")
+                return
             wb.save(out)
-            self._show_info("Sucesso", f"Tabelas extraídas salvas em:\n{out}")
+            self._set_status(lbl, prog, "✅ Concluído!", 1.0)
+            self._show_info("Sucesso", f"{tabelas_encontradas} página(s) extraída(s) para:\n{out}")
         except Exception as e:
-            self._show_err("Erro", f"Extratura de tabela falhou:\n{e}")
+            self._set_status(lbl, prog, f"❌ Erro: {e}", 0.0)
+            self._show_err("Erro", f"Falha na extração:\n{str(e)}")
 
-    def do_jpg_to_pdf(self):
-        files = filedialog.askopenfilenames(title="Selecione Múltiplas Imagens (Ordem Final)", filetypes=[("Images", "*.jpg;*.jpeg;*.png")])
+    # ----------- Motor 4: Fotos → PDF -----------
+    def do_jpg_to_pdf(self, status_lbl, prog):
+        files = filedialog.askopenfilenames(
+            title="Selecione as imagens (a ordem de seleção = ordem no PDF)",
+            filetypes=[("Imagens", "*.jpg *.jpeg *.png *.bmp *.tiff")])
         if not files: return
-        try:
-            # Pega o mesmo diretório da primeira imagem e cria um PDF genérico lá.
-            out = os.path.join(os.path.dirname(files[0]), "Album_Unificado.pdf")
-            images = []
-            for f in files:
-                img = Image.open(f)
-                img = img.convert("RGB")
-                img = ImageOps.exif_transpose(img)
-                images.append(img)
-            
-            if images:
-                images[0].save(out, save_all=True, append_images=images[1:], resolution=100.0)
-                self._show_info("Sucesso", f"Álbum fotográfico em PDF salvo em:\n{out}")
-            for img in images:
-                img.close()
-        except Exception as e:
-            self._show_err("Erro", f"Falha ao unir as imagens:\n{e}")
+        out = filedialog.asksaveasfilename(title="Salvar PDF como...",
+                                           defaultextension=".pdf",
+                                           filetypes=[("PDF", "*.pdf")],
+                                           initialfile="Album_Imagens.pdf")
+        if not out: return
+        threading.Thread(target=self._bg_jpg_to_pdf, args=(list(files), out, status_lbl, prog), daemon=True).start()
 
-    def do_split_pdf(self):
-        file = filedialog.askopenfilename(title="Selecione o PDF", filetypes=[("PDF files", "*.pdf")])
+    def _bg_jpg_to_pdf(self, files, out, lbl, prog):
+        try:
+            self._set_status(lbl, prog, "🔄 Processando imagens...", 0.05)
+            doc = fitz.open()
+            total = len(files)
+            for i, f in enumerate(files):
+                self._set_status(lbl, prog, f"🔄 Imagem {i+1}/{total}", (i+1)/total * 0.9)
+                # Corrige rotação EXIF antes de inserir
+                pil_img = Image.open(f)
+                pil_img = ImageOps.exif_transpose(pil_img)
+                pil_img = pil_img.convert("RGB")
+                # Salva temporariamente como JPEG sem metadados conflitantes
+                import tempfile
+                with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+                    tmp_path = tmp.name
+                pil_img.save(tmp_path, "JPEG", quality=90)
+                pil_img.close()
+                # Insere no PDF via PyMuPDF (muito mais robusto)
+                img_doc = fitz.open(tmp_path)
+                pdfbytes = img_doc.convert_to_pdf()
+                img_doc.close()
+                os.remove(tmp_path)
+                img_pdf = fitz.open("pdf", pdfbytes)
+                doc.insert_pdf(img_pdf)
+                img_pdf.close()
+            doc.save(out, deflate=True)
+            doc.close()
+            self._set_status(lbl, prog, "✅ Concluído!", 1.0)
+            self._show_info("Sucesso", f"{total} imagem(ns) unidas em:\n{out}")
+        except Exception as e:
+            self._set_status(lbl, prog, f"❌ Erro: {e}", 0.0)
+            self._show_err("Erro", f"Falha ao gerar PDF de imagens:\n{str(e)}")
+
+    # ----------- Motor 5: Dividir PDF -----------
+    def do_split_pdf(self, status_lbl, prog):
+        file = filedialog.askopenfilename(title="Selecione o PDF para dividir",
+                                          filetypes=[("PDF", "*.pdf")])
         if not file: return
+        dest_folder = filedialog.askdirectory(title="Escolha a pasta de destino das páginas")
+        if not dest_folder: return
+        threading.Thread(target=self._bg_split_pdf, args=(file, dest_folder, status_lbl, prog), daemon=True).start()
+
+    def _bg_split_pdf(self, file, dest_folder, lbl, prog):
         try:
             base_nome = os.path.splitext(os.path.basename(file))[0]
-            folder = os.path.dirname(file)
             doc = fitz.open(file)
-            qtd = 0
-            for i in range(len(doc)):
+            total = len(doc)
+            self._set_status(lbl, prog, f"🔄 Dividindo {total} páginas...", 0.05)
+            for i in range(total):
+                self._set_status(lbl, prog, f"🔄 Página {i+1}/{total}", (i+1)/total * 0.95)
                 novo_doc = fitz.open()
                 novo_doc.insert_pdf(doc, from_page=i, to_page=i)
-                novo_out = os.path.join(folder, f"{base_nome}_Pagina_{i+1}.pdf")
+                novo_out = os.path.join(dest_folder, f"{base_nome}_Pag_{i+1:03d}.pdf")
                 novo_doc.save(novo_out, deflate=True)
                 novo_doc.close()
-                qtd += 1
             doc.close()
-            self._show_info("Sucesso", f"{qtd} páginas foram extraídas com sucesso como PDFs independentes na mesma pasta!")
+            self._set_status(lbl, prog, "✅ Concluído!", 1.0)
+            self._show_info("Sucesso", f"{total} páginas salvas em:\n{dest_folder}")
         except Exception as e:
-            self._show_err("Erro", f"Erro no Split:\n{e}")
+            self._set_status(lbl, prog, f"❌ Erro: {e}", 0.0)
+            self._show_err("Erro", f"Erro ao dividir PDF:\n{str(e)}")
 
     # ------------------ DRAG & DROP ------------------
     def on_drag_start(self, event):
@@ -651,47 +975,63 @@ class ToolApp:
         self.reset_preview()
 
     # ------------------ PDFs ------------------
-    def select_pdf_folder(self):
-        folder = filedialog.askdirectory(title="Selecione a pasta")
-        if folder: self.pdf_folder.set(folder)
-
     def merge_pdfs(self):
-        folder = self.pdf_folder.get()
-        if not folder:
-            messagebox.showwarning("Aviso", "Selecione a pasta.")
+        if not self.pdf_files:
+            messagebox.showwarning("Aviso", "Adicione pelo menos um PDF à lista antes de unificar.")
             return
-        try:
-            arquivos = os.listdir(folder)
-            pdfs = [f for f in arquivos if not f.startswith('.') and f.lower().endswith('.pdf')]
-        except: return
-        
-        if not pdfs: return
-        
-        ordem = self.pdf_sort_order.get()
-        if "Decrescente" in ordem: pdfs.sort(reverse=True)
-        else: pdfs.sort(reverse=False)
-            
+
         out_name = self.pdf_output_name.get().strip() or "Documento_Unificado.pdf"
         if not out_name.endswith(".pdf"): out_name += ".pdf"
-        out_path = os.path.join(folder, out_name)
-        
-        if out_name in pdfs: pdfs.remove(out_name)
-        if not pdfs: return
-            
+
+        out_path = filedialog.asksaveasfilename(
+            title="Salvar PDF unificado como...",
+            defaultextension=".pdf",
+            filetypes=[("PDF", "*.pdf")],
+            initialfile=out_name)
+        if not out_path: return
+
+        self.pdf_merge_btn.configure(state="disabled")
+        self.pdf_progress_frame.pack(fill="x", pady=8)
+        self.pdf_progress.set(0)
+        self.pdf_status_lbl.configure(text="Iniciando unificação...")
+
+        threading.Thread(target=self._bg_merge_pdfs, args=(out_path,), daemon=True).start()
+
+    def _bg_merge_pdfs(self, out_path):
+        total = len(self.pdf_files)
         try:
-            doc_final = fitz.open() 
-            for pdf_file in pdfs:
+            doc_final = fitz.open()
+            for i, p in enumerate(self.pdf_files):
+                perc = (i + 1) / total
+                self.root.after(0, lambda v=perc, i=i: (
+                    self.pdf_progress.set(v),
+                    self.pdf_perc_lbl.configure(text=f"{int(v*100)}%"),
+                    self.pdf_status_lbl.configure(text=f"Processando: {self.pdf_files[i]['name']}")
+                ))
                 try:
-                    doc_temp = fitz.open(os.path.join(folder, pdf_file))
+                    doc_temp = fitz.open(p['path'])
                     doc_final.insert_pdf(doc_temp)
                     doc_temp.close()
-                except: pass
-            
+                except Exception as e:
+                    print(f"Erro ao ler {p['name']}: {e}")
+
+            self.root.after(0, lambda: self.pdf_status_lbl.configure(text="💾 Salvando arquivo final..."))
             doc_final.save(out_path, garbage=4, deflate=True)
             doc_final.close()
-            messagebox.showinfo("Concluído", f"Unificados em '{out_name}'.")
+
+            self.root.after(0, lambda: (
+                self.pdf_progress.set(1.0),
+                self.pdf_perc_lbl.configure(text="100%"),
+                self.pdf_status_lbl.configure(text="✅ Concluído!"),
+                self.pdf_merge_btn.configure(state="normal"),
+                messagebox.showinfo("Sucesso", f"PDFs unificados com sucesso em:\n{out_path}")
+            ))
         except Exception as e:
-            messagebox.showerror("Erro", str(e))
+            self.root.after(0, lambda: (
+                self.pdf_status_lbl.configure(text=f"❌ Erro: {e}"),
+                self.pdf_merge_btn.configure(state="normal"),
+                messagebox.showerror("Erro", str(e))
+            ))
 
     def check_for_updates(self):
         try:
@@ -785,6 +1125,7 @@ class ToolApp:
         except Exception as e:
             messagebox.showerror("Erro Crítico de Instalação", f"Falha ao realizar 'Seamless Update':\n\n{e}")
             self.frame_progress.pack_forget()
+
 
 if __name__ == "__main__":
     # CustomTkinter precisa ser instanciado como ctk.CTk()

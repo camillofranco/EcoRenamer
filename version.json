@@ -1,6 +1,7 @@
 {
-    "version": "1.4.4",
-    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.4/EcoRenamer_Win_v1.4.4.zip",
-    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.4/EcoRenamer_Mac_v1.4.4.zip",
-    "changelog": "v1.4.4\n- NOVA CAIXA DE FERRAMENTAS!\n- Adicionadas conversoes avancadas: PDF para Word, Excel para PDF, PDF para Excel e Imagens consolidadas.\n- Novo cortador de paginas inteligente direto do PyMuPDF.\n- Melhoria de multithreading para garantir interface super fluida.\n- Update automatico aprimorado."
+  "version": "1.4.5",
+  "notes": "v1.4.5 (Clean Edition)\n- Remoção de IA para maior leveza.\n- Foco em privacidade.\n- Melhoria no OCR local.",
+  "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.5/EcoRenamer_Mac_v1.4.5.zip",
+  "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.5/EcoRenamer_Win_v1.4.5.zip",
+  "changelog": "v1.4.5\n- REMOVIDA IA (CHAT) para estabilidade e privacidade.\n- Tamanho do app reduzido drasticamente.\n- OCR local via Tesseract mantido nos Utilitários."
 }
