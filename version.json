@@ -1,6 +1,6 @@
 {
-    "version": "1.4.7",
-    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.7/EcoRenamer_Win_v1.4.7.zip",
-    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.7/EcoRenamer_Mac_v1.4.7.zip",
-    "changelog": "v1.4.7\n- Fix critico: Aplicativo agora fecha corretamente apos baixar atualizacao.\n- Substituido sys.exit() por os._exit() para encerrar o loop do tkinter da thread principal.\n- Ordenacao de PDFs por Bloco e Apto.\n- Build automatico via GitHub Actions."
+    "version": "1.4.8",
+    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.8/EcoRenamer_Win_v1.4.8.zip",
+    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.8/EcoRenamer_Mac_v1.4.8.zip",
+    "changelog": "v1.4.8\n- Correcao nas dependencias de compilacao (incluindo pdfplumber).\n- Correcao de compatibilidade com macOS/Windows build.\n- Icones adicionados corretamente."
 }

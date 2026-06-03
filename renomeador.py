@@ -32,7 +32,7 @@ try:
 except ImportError:
     _PYTESSERACT_OK = False
 
-VERSION = "1.4.7" # Fix: os._exit(0) para encerrar app do updater corretamente
+VERSION = "1.4.8" # Fix: Inclui todas as dependências (pdfplumber) no build
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 

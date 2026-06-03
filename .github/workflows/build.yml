@@ -27,13 +27,16 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install pyinstaller customtkinter darkdetect \
-                      Pillow PyMuPDF openpyxl
+                      Pillow PyMuPDF openpyxl pillow-heif \
+                      pdf2docx pdfplumber reportlab pytesseract python-docx
 
       - name: Compilar app (PyInstaller)
         run: |
-          pyinstaller --noconfirm --windowed \
+          pyinstaller --noconfirm --windowed --noconsole \
             --name "RenomeadorApp" \
+            --icon "icon_mac.png" \
             --collect-all customtkinter \
+            --hidden-import pytesseract \
             --add-data "logo_ecowave.png:." \
             renomeador.py
 
@@ -68,7 +71,8 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install pyinstaller customtkinter darkdetect `
-                      Pillow PyMuPDF openpyxl
+                      Pillow PyMuPDF openpyxl pillow-heif `
+                      pdf2docx pdfplumber reportlab pytesseract python-docx
 
       - name: Compilar app (PyInstaller)
         run: |
@@ -76,6 +80,7 @@ jobs:
             --name "RenomeadorApp" `
             --icon "icon.ico" `
             --collect-all customtkinter `
+            --hidden-import pytesseract `
             --add-data "logo_ecowave.png;." `
             renomeador.py
 
