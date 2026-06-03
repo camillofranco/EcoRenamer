@@ -7,3 +7,5 @@ build/
 .DS_Store
 .idea/
 .vscode/
+*.zip
+icon_mac.png

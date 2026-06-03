@@ -32,7 +32,7 @@ try:
 except ImportError:
     _PYTESSERACT_OK = False
 
-VERSION = "1.4.5" # Versão estável sem IA
+VERSION = "1.4.5" # Natural sort de PDFs por Bloco/Apto IA
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
@@ -110,6 +110,9 @@ class ToolApp:
         self.tabview = ctk.CTkTabview(self.root, corner_radius=10, segmented_button_selected_color=self.c_primary,
                                       segmented_button_selected_hover_color="#1B5E20")
         self.tabview.pack(fill="both", expand=True, padx=20, pady=20)
+        self.tabview.add("📸  GESTÃO DE IMAGENS")
+        self.tabview.add("📄  GESTÃO DE PDFS")
+        self.tabview.add("🛠️ UTILITÁRIOS")
         
         self.create_img_tab(self.tabview.tab("📸  GESTÃO DE IMAGENS"))
         self.tabview.tab("📄  GESTÃO DE PDFS").columnconfigure(0, weight=1)
@@ -285,7 +288,10 @@ class ToolApp:
         frame_order = ctk.CTkFrame(parent, fg_color="transparent")
         frame_order.grid(row=2, column=0, sticky="ew", pady=(0, 5))
         ctk.CTkButton(frame_order, text="⬆ Subir", command=self.pdf_move_up, fg_color="gray40", hover_color="gray25", width=100).pack(side="left", padx=(0,5))
-        ctk.CTkButton(frame_order, text="⬇ Descer", command=self.pdf_move_down, fg_color="gray40", hover_color="gray25", width=100).pack(side="left")
+        ctk.CTkButton(frame_order, text="⬇ Descer", command=self.pdf_move_down, fg_color="gray40", hover_color="gray25", width=100).pack(side="left", padx=(0,15))
+        # Botão de ordenação inteligente por Bloco/Apto
+        ctk.CTkButton(frame_order, text="🗒️ Ordenar por Bloco / Apto", command=self.pdf_sort_by_bloco_apto,
+                      fg_color=self.c_primary, hover_color="#1B5E20", width=200, height=34).pack(side="left")
 
         # --- Botão e Progresso ---
         frame_bot = ctk.CTkFrame(parent, fg_color="transparent")
@@ -316,6 +322,37 @@ class ToolApp:
     def pdf_clear_list(self):
         self.pdf_files.clear()
         self._refresh_pdf_tree()
+
+    def pdf_sort_by_bloco_apto(self):
+        """Ordena os PDFs por Bloco e Apto numericamente.
+        Formato esperado: '... - [APTO] - Bloco [N] ...'
+        Extrai os números via regex para garantir ordenação numérica correta.
+        """
+        import re
+
+        def extrair_chave(pdf_item):
+            nome = pdf_item['name']
+            # Extrai o número do Bloco: procura por 'Bloco' seguido de número
+            bloco_match = re.search(r'Bloco[\s\-_]*(\d+)', nome, re.IGNORECASE)
+            # Extrai o Apto: é o número que vem entre os dois ' - ' antes de 'Bloco'
+            # Formato: '... - [APTO] - Bloco [N] ...'
+            apto_match = re.search(r'-\s*(\d+)\s*-\s*Bloco', nome, re.IGNORECASE)
+
+            bloco_num = int(bloco_match.group(1)) if bloco_match else 0
+            apto_num  = int(apto_match.group(1))  if apto_match  else 0
+
+            # Fallback: se não encontrou nada, ordena alphabeticamente sem quebrar
+            if bloco_num == 0 and apto_num == 0:
+                # tenta extrair qualquer sequência de números para não deixar solto
+                nums = [int(x) for x in re.findall(r'\d+', nome)]
+                return tuple(nums) if nums else (0,)
+
+            return (bloco_num, apto_num)
+
+        self.pdf_files.sort(key=extrair_chave)
+        self._refresh_pdf_tree()
+        messagebox.showinfo("Ordenação Concluída",
+                            f"{len(self.pdf_files)} PDFs ordenados numericamente por Bloco e Apto com sucesso!")
 
     def _refresh_pdf_tree(self):
         for item in self.pdf_tree.get_children():
@@ -948,9 +985,11 @@ class ToolApp:
             if self.compress_var.get():
                 img = Image.open(item['orig_path'])
                 img = ImageOps.exif_transpose(img)
-                img.thumbnail((800, 800), Image.Resampling.LANCZOS)
+                # BILINEAR é 3x mais rápido que LANCZOS com qualidade aceitável
+                img.thumbnail((800, 800), Image.Resampling.BILINEAR)
                 img = img.convert("RGB")
-                img.save(temp_target, "JPEG", optimize=True, quality=45)
+                # optimize=False evita a varredura dupla do JPEG (muito mais rápido)
+                img.save(temp_target, "JPEG", optimize=False, quality=60)
                 img.close()
             else:
                 shutil.copy2(item['orig_path'], temp_target)
