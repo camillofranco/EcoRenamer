@@ -1,6 +1,6 @@
 {
-    "version": "1.4.9",
-    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.9/EcoRenamer_Win_v1.4.9.zip",
-    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.9/EcoRenamer_Mac_v1.4.9.zip",
-    "changelog": "v1.4.9\n- Correcao de build no macOS (geracao do icone icon_mac.png no CI).\n- Resolvido erro de compilacao do PyInstaller no GitHub Actions."
+    "version": "1.5.0",
+    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.5.0/EcoRenamer_Win_v1.5.0.zip",
+    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.5.0/EcoRenamer_Mac_v1.5.0.zip",
+    "changelog": "v1.5.0\n- Atualizador do Windows muito mais robusto, aguardando o processo fechar por completo.\n- Copias via xcopy agora continuam mesmo sob pequenos avisos ou erros."
 }

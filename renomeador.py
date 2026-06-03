@@ -32,7 +32,7 @@ try:
 except ImportError:
     _PYTESSERACT_OK = False
 
-VERSION = "1.4.9" # Fix: Gera ícone macOS via sips no CI/CD
+VERSION = "1.5.0" # Fix: Novo atualizador Windows ultra-robusto
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
@@ -1179,10 +1179,20 @@ class ToolApp:
                 script_bat = os.path.join(temp_dir, "updater.bat")
                 with open(script_bat, "w") as f:
                     f.write("@echo off\n")
-                    f.write("timeout /t 2 /nobreak >nul\n") # Espera App fechar
-                    f.write(f"xcopy /S /E /Y /I \"{temp_dir}\\*\" \"{app_path}\\\"\n") # Subscreve forçado
-                    f.write(f"start \"\" \"{os.path.join(app_path, exe_name)}\"\n") # Inicia novo executável
-                    f.write("del \"%~f0\"\n") # Pede pro arquivo bat tentar se matar
+                    f.write(":: Espera ate o processo principal fechar\n")
+                    f.write(":wait_loop\n")
+                    f.write(f"tasklist /FI \"IMAGENAME eq {exe_name}\" 2>NUL | find /I /N \"{exe_name}\" >NUL\n")
+                    f.write("if \"%ERRORLEVEL%\"==\"0\" (\n")
+                    f.write("    timeout /t 1 /nobreak >nul\n")
+                    f.write("    goto wait_loop\n")
+                    f.write(")\n")
+                    # /C para continuar mesmo que de erro ao copiar o proprio updater.bat que esta rodando
+                    f.write(f"xcopy /S /E /Y /I /C \"{temp_dir}\\*\" \"{app_path}\\\"\n") 
+                    # Deleta o zip copiado para nao sujar a pasta final
+                    f.write(f"del /f /q \"{os.path.join(app_path, 'u.zip')}\" 2>nul\n")
+                    # Reinicia
+                    f.write(f"start \"\" \"{os.path.join(app_path, exe_name)}\"\n")
+                    f.write("del \"%~f0\"\n")
                     
                 # Roda o BAT desanexado do nosso processo
                 subprocess.Popen([script_bat], creationflags=subprocess.CREATE_NEW_CONSOLE)
