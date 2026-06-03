@@ -1,0 +1,92 @@
+name: 🤖 Build EcoWave Pro (Mac + Windows)
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  # ─────────────────────────────────────────
+  #  macOS — Gera RenomeadorApp.app + ZIP
+  # ─────────────────────────────────────────
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependências
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller customtkinter darkdetect \
+                      Pillow PyMuPDF openpyxl
+
+      - name: Compilar app (PyInstaller)
+        run: |
+          pyinstaller --noconfirm --windowed \
+            --name "RenomeadorApp" \
+            --collect-all customtkinter \
+            --add-data "logo_ecowave.png:." \
+            renomeador.py
+
+      - name: Empacotar ZIP
+        run: |
+          cd dist
+          zip -ry ../EcoRenamer_Mac_${{ github.ref_name }}.zip RenomeadorApp.app
+          cd ..
+
+      - name: Publicar no GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: EcoRenamer_Mac_${{ github.ref_name }}.zip
+          name: "EcoWave Pro ${{ github.ref_name }}"
+          generate_release_notes: true
+
+  # ─────────────────────────────────────────
+  #  Windows — Gera RenomeadorApp.exe + ZIP
+  # ─────────────────────────────────────────
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar dependências
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller customtkinter darkdetect `
+                      Pillow PyMuPDF openpyxl
+
+      - name: Compilar app (PyInstaller)
+        run: |
+          pyinstaller --noconfirm --windowed --noconsole `
+            --name "RenomeadorApp" `
+            --icon "icon.ico" `
+            --collect-all customtkinter `
+            --add-data "logo_ecowave.png;." `
+            renomeador.py
+
+      - name: Empacotar ZIP
+        run: |
+          Compress-Archive -Path "dist\RenomeadorApp\*" `
+            -DestinationPath "EcoRenamer_Win_${{ github.ref_name }}.zip" -Force
+
+      - name: Publicar no GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: EcoRenamer_Win_${{ github.ref_name }}.zip
+          name: "EcoWave Pro ${{ github.ref_name }}"
+          generate_release_notes: true

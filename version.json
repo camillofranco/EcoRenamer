@@ -1,6 +1,6 @@
 {
-    "version": "1.4.5",
-    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.5/EcoRenamer_Win_v1.4.5.zip",
-    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.5/EcoRenamer_Mac_v1.4.5.zip",
-    "changelog": "v1.4.5\n- Novo botao 'Ordenar por Bloco / Apto' na aba de PDFs.\n- Ordenacao numerica inteligente: Bloco 1 > Bloco 2, Apto 1 > Apto 2 (em vez de alfabetica).\n- Fix de warning amigavel para fotos presas na nuvem (Google Drive / iCloud)."
+    "version": "1.4.6",
+    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.6/EcoRenamer_Win_v1.4.6.zip",
+    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.4.6/EcoRenamer_Mac_v1.4.6.zip",
+    "changelog": "v1.4.6\n- Build automatico via GitHub Actions CI/CD.\n- Agora Mac e Windows sao compilados automaticamente pelo GitHub.\n- Botao 'Ordenar por Bloco / Apto' na aba de PDFs.\n- Fix de warning para fotos presas na nuvem (Google Drive / iCloud)."
 }

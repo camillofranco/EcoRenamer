@@ -32,7 +32,7 @@ try:
 except ImportError:
     _PYTESSERACT_OK = False
 
-VERSION = "1.4.5" # Natural sort de PDFs por Bloco/Apto IA
+VERSION = "1.4.6" # Primeiro build automático via GitHub Actions CI/CD
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
