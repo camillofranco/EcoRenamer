@@ -32,7 +32,7 @@ try:
 except ImportError:
     _PYTESSERACT_OK = False
 
-VERSION = "1.5.0" # Fix: Novo atualizador Windows ultra-robusto
+VERSION = "1.5.1" # Fix: Corrigido descompactador de ZIP no macOS (preserva links/permissoes)
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
@@ -1131,8 +1131,12 @@ class ToolApp:
                 self.progress.set(0.9)
             ))
             
-            with zipfile.ZipFile(zpath, 'r') as zf: 
-                zf.extractall(temp_dir)
+            if platform.system() == "Darwin":
+                # Use system unzip to preserve symlinks and execution permissions
+                subprocess.run(["unzip", "-q", "-o", zpath, "-d", temp_dir], check=True)
+            else:
+                with zipfile.ZipFile(zpath, 'r') as zf: 
+                    zf.extractall(temp_dir)
             
             # Bloqueio caso seja rodado via Python Raw
             is_frozen = getattr(sys, 'frozen', False)
