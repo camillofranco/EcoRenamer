@@ -32,6 +32,7 @@ jobs:
 
       - name: Compilar app (PyInstaller)
         run: |
+          sips -z 512 512 icon.png --out icon_mac.png
           pyinstaller --noconfirm --windowed --noconsole \
             --name "RenomeadorApp" \
             --icon "icon_mac.png" \

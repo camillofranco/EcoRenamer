@@ -32,7 +32,7 @@ try:
 except ImportError:
     _PYTESSERACT_OK = False
 
-VERSION = "1.4.8" # Fix: Inclui todas as dependências (pdfplumber) no build
+VERSION = "1.4.9" # Fix: Gera ícone macOS via sips no CI/CD
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
