@@ -32,7 +32,7 @@ try:
 except ImportError:
     _PYTESSERACT_OK = False
 
-VERSION = "1.4.6" # Primeiro build automático via GitHub Actions CI/CD
+VERSION = "1.4.7" # Fix: os._exit(0) para encerrar app do updater corretamente
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
@@ -1168,7 +1168,9 @@ class ToolApp:
                     
                 os.chmod(script_sh, 0o755)
                 subprocess.Popen(["/bin/bash", script_sh], start_new_session=True)
-                sys.exit(0) # Morre
+                # os._exit() encerra o processo INTEIRO (inclusive o loop do tkinter)
+                # sys.exit() só encerra a thread atual — NÃO fecha a janela
+                self.root.after(0, lambda: os._exit(0))
                 
             else: # Windows
                 app_path = os.path.dirname(sys.executable)
@@ -1184,7 +1186,8 @@ class ToolApp:
                     
                 # Roda o BAT desanexado do nosso processo
                 subprocess.Popen([script_bat], creationflags=subprocess.CREATE_NEW_CONSOLE)
-                sys.exit(0) # Mata o App Atual
+                # os._exit() encerra o processo INTEIRO (inclusive o loop do tkinter)
+                self.root.after(0, lambda: os._exit(0))
                 
         except Exception as e:
             messagebox.showerror("Erro Crítico de Instalação", f"Falha ao realizar 'Seamless Update':\n\n{e}")
