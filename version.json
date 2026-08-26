@@ -1,6 +1,6 @@
 {
-    "version": "1.5.1",
-    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.5.1/EcoRenamer_Win_v1.5.1.zip",
-    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.5.1/EcoRenamer_Mac_v1.5.1.zip",
-    "changelog": "v1.5.1\n- Correção do atualizador no macOS para preservar permissões de execução e links simbólicos.\n- Atualizador agora descompacta o arquivo com unzip nativo no Mac."
+    "version": "1.6.0",
+    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.6.0/EcoRenamer_Win_v1.6.0.zip",
+    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.6.0/EcoRenamer_Mac_v1.6.0.zip",
+    "changelog": "v1.6.0\n- Memória de pasta pai (abre uma pasta antes da selecionada anteriormente).\n- Salva automaticamente as preferências (pastas, opções, tema).\n- Novo alternador manual de Tema (Claro/Escuro/Sistema) no cabeçalho.\n- Resumo estatístico da pasta (total de fotos e tamanho bruto)."
 }

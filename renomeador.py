@@ -32,9 +32,11 @@ try:
 except ImportError:
     _PYTESSERACT_OK = False
 
-VERSION = "1.5.1" # Fix: Corrigido descompactador de ZIP no macOS (preserva links/permissoes)
+VERSION = "1.6.0" # Feature: Memória de pasta pai, persistência de configs, estatísticas e alternador de tema
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
+
+CONFIG_FILE = os.path.expanduser("~/.ecowave_renamer_config.json")
 
 def resource_path(relative_path):
     try:
@@ -72,6 +74,8 @@ class ToolApp:
         self.compress_var = ctk.BooleanVar(value=True)
         self.sort_order = ctk.StringVar(value="Decrescente (Z-A)")
         self.mapping = []
+        self.last_dir = ""
+        self.theme_mode = ctk.StringVar(value="System")
         
         # Variáveis PDF
         self.pdf_folder = ctk.StringVar()
@@ -80,6 +84,7 @@ class ToolApp:
         self.processing = False
         self.pdf_files = []  # Lista de PDFs para merge
         
+        self.load_config()
         self.create_widgets()
 
         
@@ -105,6 +110,13 @@ class ToolApp:
         badge.pack(side="right", padx=40)
         ctk.CTkLabel(badge, text="ENTERPRISE EDITION", font=ctk.CTkFont(size=12, weight="bold"), text_color=self.c_secondary).pack()
         ctk.CTkLabel(badge, text=f"Build v{VERSION}", font=ctk.CTkFont(size=10), text_color="gray").pack()
+        
+        theme_frame = ctk.CTkFrame(badge, fg_color="transparent")
+        theme_frame.pack(pady=(2, 0))
+        ctk.CTkLabel(theme_frame, text="Tema:", font=ctk.CTkFont(size=10), text_color="gray").pack(side="left", padx=(0,4))
+        ctk.CTkOptionMenu(theme_frame, variable=self.theme_mode, values=["System", "Light", "Dark"],
+                           command=self.toggle_theme, width=90, height=22,
+                           font=ctk.CTkFont(size=10), fg_color=self.c_primary, button_color=self.c_primary).pack(side="left")
         
         # 2. SELETOR DE ABAS PRINCIPAL (Muito mais bonito que o Notebook antigo)
         self.tabview = ctk.CTkTabview(self.root, corner_radius=10, segmented_button_selected_color=self.c_primary,
@@ -180,7 +192,11 @@ class ToolApp:
         frame_tree = ctk.CTkFrame(parent, fg_color="transparent")
         frame_tree.grid(row=2, column=0, sticky="nsew", pady=10)
         frame_tree.columnconfigure(0, weight=1)
-        frame_tree.rowconfigure(0, weight=1)
+        frame_tree.rowconfigure(1, weight=1)
+        
+        self.lbl_tree_stats = ctk.CTkLabel(frame_tree, text="📊 Resumo da Pasta: Nenhuma pasta carregada", 
+                                           font=ctk.CTkFont(size=12, weight="bold"), anchor="w")
+        self.lbl_tree_stats.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 5))
         
         # É uma árvore Tkinter, mas daremos um ar moderno a ela alterando via ttk.Style
         style = ttk.Style()
@@ -208,8 +224,8 @@ class ToolApp:
         scrollbar = ctk.CTkScrollbar(frame_tree, command=self.tree.yview)
         self.tree.configure(yscroll=scrollbar.set)
         
-        self.tree.grid(row=0, column=0, sticky="nsew")
-        scrollbar.grid(row=0, column=1, sticky="ns")
+        self.tree.grid(row=1, column=0, sticky="nsew")
+        scrollbar.grid(row=1, column=1, sticky="ns")
 
         # --- BLOCO INFERIOR (Ação) ---
         frame_bot = ctk.CTkFrame(parent, fg_color="transparent")
@@ -312,12 +328,16 @@ class ToolApp:
 
     # ---------- PDF TAB helpers ----------
     def pdf_add_files(self):
-        files = filedialog.askopenfilenames(title="Selecione os PDFs", filetypes=[("PDF files", "*.pdf")])
-        for f in files:
-            if f not in [p['path'] for p in self.pdf_files]:
-                size = os.path.getsize(f)
-                self.pdf_files.append({'path': f, 'name': os.path.basename(f), 'size': size})
-        self._refresh_pdf_tree()
+        init_dir = self.get_initial_dir()
+        files = filedialog.askopenfilenames(title="Selecione os PDFs", filetypes=[("PDF files", "*.pdf")], initialdir=init_dir)
+        if files:
+            self.last_dir = os.path.dirname(files[0])
+            self.save_config()
+            for f in files:
+                if f not in [p['path'] for p in self.pdf_files]:
+                    size = os.path.getsize(f)
+                    self.pdf_files.append({'path': f, 'name': os.path.basename(f), 'size': size})
+            self._refresh_pdf_tree()
 
     def pdf_clear_list(self):
         self.pdf_files.clear()
@@ -467,13 +487,17 @@ class ToolApp:
 
     # ----------- Motor 1: PDF → Word -----------
     def do_pdf_to_word(self, status_lbl, prog):
-        # Diálogo na thread PRINCIPAL
+        init_dir = self.get_initial_dir()
         file = filedialog.askopenfilename(title="Selecione o PDF de origem",
-                                          filetypes=[("PDF", "*.pdf")])
+                                          filetypes=[("PDF", "*.pdf")],
+                                          initialdir=init_dir)
         if not file: return
+        self.last_dir = os.path.dirname(file)
+        self.save_config()
         out = filedialog.asksaveasfilename(title="Salvar Word como...",
                                            defaultextension=".docx",
                                            filetypes=[("Word", "*.docx")],
+                                           initialdir=os.path.dirname(file),
                                            initialfile=os.path.splitext(os.path.basename(file))[0] + ".docx")
         if not out: return
         threading.Thread(target=self._bg_pdf_to_word, args=(file, out, status_lbl, prog), daemon=True).start()
@@ -556,12 +580,17 @@ class ToolApp:
 
     # ----------- Motor 2: Excel → PDF -----------
     def do_excel_to_pdf(self, status_lbl, prog):
+        init_dir = self.get_initial_dir()
         file = filedialog.askopenfilename(title="Selecione a planilha Excel",
-                                          filetypes=[("Excel", "*.xlsx")])
+                                          filetypes=[("Excel", "*.xlsx")],
+                                          initialdir=init_dir)
         if not file: return
+        self.last_dir = os.path.dirname(file)
+        self.save_config()
         out = filedialog.asksaveasfilename(title="Salvar PDF como...",
                                            defaultextension=".pdf",
                                            filetypes=[("PDF", "*.pdf")],
+                                           initialdir=os.path.dirname(file),
                                            initialfile=os.path.splitext(os.path.basename(file))[0] + ".pdf")
         if not out: return
         threading.Thread(target=self._bg_excel_to_pdf, args=(file, out, status_lbl, prog), daemon=True).start()
@@ -616,12 +645,17 @@ class ToolApp:
 
     # ----------- Motor 3: PDF → Excel -----------
     def do_pdf_to_excel(self, status_lbl, prog):
+        init_dir = self.get_initial_dir()
         file = filedialog.askopenfilename(title="Selecione o PDF com tabelas",
-                                          filetypes=[("PDF", "*.pdf")])
+                                          filetypes=[("PDF", "*.pdf")],
+                                          initialdir=init_dir)
         if not file: return
+        self.last_dir = os.path.dirname(file)
+        self.save_config()
         out = filedialog.asksaveasfilename(title="Salvar Excel como...",
                                            defaultextension=".xlsx",
                                            filetypes=[("Excel", "*.xlsx")],
+                                           initialdir=os.path.dirname(file),
                                            initialfile=os.path.splitext(os.path.basename(file))[0] + "_Extraido.xlsx")
         if not out: return
         threading.Thread(target=self._bg_pdf_to_excel, args=(file, out, status_lbl, prog), daemon=True).start()
@@ -666,13 +700,18 @@ class ToolApp:
 
     # ----------- Motor 4: Fotos → PDF -----------
     def do_jpg_to_pdf(self, status_lbl, prog):
+        init_dir = self.get_initial_dir()
         files = filedialog.askopenfilenames(
             title="Selecione as imagens (a ordem de seleção = ordem no PDF)",
-            filetypes=[("Imagens", "*.jpg *.jpeg *.png *.bmp *.tiff")])
+            filetypes=[("Imagens", "*.jpg *.jpeg *.png *.bmp *.tiff")],
+            initialdir=init_dir)
         if not files: return
+        self.last_dir = os.path.dirname(files[0])
+        self.save_config()
         out = filedialog.asksaveasfilename(title="Salvar PDF como...",
                                            defaultextension=".pdf",
                                            filetypes=[("PDF", "*.pdf")],
+                                           initialdir=self.last_dir,
                                            initialfile="Album_Imagens.pdf")
         if not out: return
         threading.Thread(target=self._bg_jpg_to_pdf, args=(list(files), out, status_lbl, prog), daemon=True).start()
@@ -712,11 +751,17 @@ class ToolApp:
 
     # ----------- Motor 5: Dividir PDF -----------
     def do_split_pdf(self, status_lbl, prog):
+        init_dir = self.get_initial_dir()
         file = filedialog.askopenfilename(title="Selecione o PDF para dividir",
-                                          filetypes=[("PDF", "*.pdf")])
+                                          filetypes=[("PDF", "*.pdf")],
+                                          initialdir=init_dir)
         if not file: return
-        dest_folder = filedialog.askdirectory(title="Escolha a pasta de destino das páginas")
+        self.last_dir = os.path.dirname(file)
+        dest_folder = filedialog.askdirectory(title="Escolha a pasta de destino das páginas",
+                                              initialdir=self.last_dir)
         if not dest_folder: return
+        self.last_dir = dest_folder
+        self.save_config()
         threading.Thread(target=self._bg_split_pdf, args=(file, dest_folder, status_lbl, prog), daemon=True).start()
 
     def _bg_split_pdf(self, file, dest_folder, lbl, prog):
@@ -798,23 +843,109 @@ class ToolApp:
         for idx, item in enumerate(self.mapping):
             self.tree.insert("", "end", values=(idx + 1, item['orig_name'], item['new_name'], item['size_orig_str'], item['size_est_str']))
 
-    # ------------------ LÓGICA IMAGENS ------------------
+    # ------------------ LÓGICA IMAGENS & CONFIG ------------------
     def format_size(self, size_bytes):
         if size_bytes >= 1024 * 1024:
             return f"{size_bytes / (1024 * 1024):.2f} MB"
         else:
             return f"{size_bytes / 1024:.0f} KB"
 
+    def get_initial_dir(self, current_path=None):
+        if current_path:
+            path = os.path.abspath(current_path)
+            if os.path.isdir(path):
+                parent = os.path.dirname(path)
+                if parent and os.path.exists(parent):
+                    return parent
+            elif os.path.isfile(path):
+                parent = os.path.dirname(path)
+                if parent and os.path.exists(parent):
+                    return parent
+            else:
+                parent = os.path.dirname(path)
+                if parent and os.path.exists(parent):
+                    return parent
+
+        if hasattr(self, 'last_dir') and self.last_dir and os.path.exists(self.last_dir):
+            return self.last_dir
+
+        return os.path.expanduser("~")
+
+    def load_config(self):
+        try:
+            if os.path.exists(CONFIG_FILE):
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                    if "img_folder" in cfg and os.path.exists(cfg["img_folder"]):
+                        self.img_folder.set(cfg["img_folder"])
+                    if "excel_file" in cfg and os.path.exists(cfg["excel_file"]):
+                        self.excel_file.set(cfg["excel_file"])
+                    if "digits" in cfg:
+                        self.digits.set(cfg["digits"])
+                    if "start_number" in cfg:
+                        self.start_number.set(cfg["start_number"])
+                    if "compress_var" in cfg:
+                        self.compress_var.set(cfg["compress_var"])
+                    if "sort_order" in cfg:
+                        self.sort_order.set(cfg["sort_order"])
+                    if "last_dir" in cfg and os.path.exists(cfg["last_dir"]):
+                        self.last_dir = cfg["last_dir"]
+                    if "theme_mode" in cfg:
+                        self.theme_mode.set(cfg["theme_mode"])
+                        ctk.set_appearance_mode(cfg["theme_mode"])
+        except Exception:
+            pass
+
+    def save_config(self):
+        try:
+            cfg = {
+                "img_folder": self.img_folder.get(),
+                "excel_file": self.excel_file.get(),
+                "digits": self.digits.get(),
+                "start_number": self.start_number.get(),
+                "compress_var": self.compress_var.get(),
+                "sort_order": self.sort_order.get(),
+                "last_dir": getattr(self, "last_dir", ""),
+                "theme_mode": getattr(self, "theme_mode", ctk.StringVar(value="System")).get()
+            }
+            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, indent=4, ensure_ascii=False)
+        except Exception:
+            pass
+
+    def toggle_theme(self, choice):
+        ctk.set_appearance_mode(choice)
+        self.save_config()
+
+    def update_tree_stats(self):
+        if not hasattr(self, 'lbl_tree_stats'):
+            return
+        if not self.mapping:
+            self.lbl_tree_stats.configure(text="📊 Resumo da Pasta: Nenhuma pasta carregada")
+            return
+        total_imgs = len(self.mapping)
+        total_size = sum(os.path.getsize(m['orig_path']) for m in self.mapping if os.path.exists(m['orig_path']))
+        size_str = self.format_size(total_size)
+        self.lbl_tree_stats.configure(
+            text=f"📊 Resumo: {total_imgs} imagem(ns) encontrada(s) | Tamanho Bruto Total: {size_str}"
+        )
+
     def select_img_folder(self):
-        folder = filedialog.askdirectory(title="Selecione a pasta com as fotos")
+        init_dir = self.get_initial_dir(self.img_folder.get())
+        folder = filedialog.askdirectory(title="Selecione a pasta com as fotos", initialdir=init_dir)
         if folder:
             self.img_folder.set(folder)
+            self.last_dir = os.path.dirname(folder)
+            self.save_config()
             self.reset_preview()
 
     def select_excel(self):
-        file = filedialog.askopenfilename(title="Selecione o arquivo Excel", filetypes=[("Excel files", "*.xlsx")])
+        init_dir = self.get_initial_dir(self.excel_file.get())
+        file = filedialog.askopenfilename(title="Selecione o arquivo Excel", filetypes=[("Excel files", "*.xlsx")], initialdir=init_dir)
         if file:
             self.excel_file.set(file)
+            self.last_dir = os.path.dirname(file)
+            self.save_config()
             self.reset_preview()
 
     def reset_preview(self):
@@ -822,6 +953,7 @@ class ToolApp:
         for item in self.tree.get_children():
             self.tree.delete(item)
         self.btn_rename.configure(state="disabled")
+        self.update_tree_stats()
 
     def load_data(self):
         folder = self.img_folder.get()
@@ -921,6 +1053,9 @@ class ToolApp:
             
         if self.mapping:
             self.btn_rename.configure(state="normal")
+            
+        self.update_tree_stats()
+        self.save_config()
             
     def rename_files(self):
         if not self.mapping or self.processing: return
