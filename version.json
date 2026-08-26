@@ -1,6 +1,6 @@
 {
-    "version": "1.6.0",
-    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.6.0/EcoRenamer_Win_v1.6.0.zip",
-    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.6.0/EcoRenamer_Mac_v1.6.0.zip",
-    "changelog": "v1.6.0\n- Memória de pasta pai (abre uma pasta antes da selecionada anteriormente).\n- Salva automaticamente as preferências (pastas, opções, tema).\n- Novo alternador manual de Tema (Claro/Escuro/Sistema) no cabeçalho.\n- Resumo estatístico da pasta (total de fotos e tamanho bruto)."
+    "version": "1.7.0",
+    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.7.0/EcoRenamer_Win_v1.7.0.zip",
+    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.7.0/EcoRenamer_Mac_v1.7.0.zip",
+    "changelog": "v1.7.0\n- Auto-correção universal de orientação EXIF (fotos de celular/tablet em pé ou de lado).\n- Opção de Rotação Manual fixa (90° Direita, 90° Esquerda, 180°).\n- Correção de rotação mantida mesmo sem compressão de imagens."
 }

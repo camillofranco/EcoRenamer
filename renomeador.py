@@ -32,7 +32,7 @@ try:
 except ImportError:
     _PYTESSERACT_OK = False
 
-VERSION = "1.6.0" # Feature: Memória de pasta pai, persistência de configs, estatísticas e alternador de tema
+VERSION = "1.7.0" # Feature: Auto-correção de rotação EXIF (fotos de celular) + rotação manual
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
@@ -73,6 +73,8 @@ class ToolApp:
         self.start_number = tk.IntVar(value=1)
         self.compress_var = ctk.BooleanVar(value=True)
         self.sort_order = ctk.StringVar(value="Decrescente (Z-A)")
+        self.auto_rotate_var = ctk.BooleanVar(value=True)
+        self.manual_rotate_var = ctk.StringVar(value="Sem rotação manual")
         self.mapping = []
         self.last_dir = ""
         self.theme_mode = ctk.StringVar(value="System")
@@ -182,10 +184,21 @@ class ToolApp:
         
         ctk.CTkCheckBox(frame_opts, text="Comprimir em HD (Mais Rápido no App)", variable=self.compress_var, text_color=self.c_primary, font=ctk.CTkFont(weight="bold")).pack(side="left")
 
+        # Linha 4: Opções de Rotação (EXIF + Manual)
+        frame_opts_2 = ctk.CTkFrame(frame_config, fg_color="transparent")
+        frame_opts_2.grid(row=3, column=0, columnspan=3, sticky="w", pady=(0, 10))
+        
+        ctk.CTkCheckBox(frame_opts_2, text="📱 Auto-Corrigir Orientação EXIF (Fotos de Celular)", 
+                        variable=self.auto_rotate_var, text_color=self.c_primary, font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(0, 20))
+                        
+        ctk.CTkLabel(frame_opts_2, text="Rotação Manual:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(0,5))
+        ctk.CTkComboBox(frame_opts_2, variable=self.manual_rotate_var, 
+                        values=["Sem rotação manual", "Girar 90° Direita ↻", "Girar 90° Esquerda ↺", "Girar 180° 🔄"], width=190).pack(side="left")
+
         # Botão Carregar (Grande)
         self.btn_load = ctk.CTkButton(frame_config, text="1. MONTAR ESTRUTURA DE NOMES", command=self.load_data, 
                                       fg_color=self.c_primary, text_color="white", font=ctk.CTkFont(size=14, weight="bold"), height=45)
-        self.btn_load.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(15, 0))
+        self.btn_load.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(10, 0))
 
 
         # --- BLOCO CENTRAL (Tabela Tkinter Estilizada para CTk) ---
@@ -893,6 +906,10 @@ class ToolApp:
                     if "theme_mode" in cfg:
                         self.theme_mode.set(cfg["theme_mode"])
                         ctk.set_appearance_mode(cfg["theme_mode"])
+                    if "auto_rotate_var" in cfg:
+                        self.auto_rotate_var.set(cfg["auto_rotate_var"])
+                    if "manual_rotate_var" in cfg:
+                        self.manual_rotate_var.set(cfg["manual_rotate_var"])
         except Exception:
             pass
 
@@ -906,7 +923,9 @@ class ToolApp:
                 "compress_var": self.compress_var.get(),
                 "sort_order": self.sort_order.get(),
                 "last_dir": getattr(self, "last_dir", ""),
-                "theme_mode": getattr(self, "theme_mode", ctk.StringVar(value="System")).get()
+                "theme_mode": getattr(self, "theme_mode", ctk.StringVar(value="System")).get(),
+                "auto_rotate_var": getattr(self, "auto_rotate_var", ctk.BooleanVar(value=True)).get(),
+                "manual_rotate_var": getattr(self, "manual_rotate_var", ctk.StringVar(value="Sem rotação manual")).get()
             }
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(cfg, f, indent=4, ensure_ascii=False)
@@ -1117,14 +1136,34 @@ class ToolApp:
     def process_single_image(self, item, index):
         temp_target = item['new_path'] + ".ecotmp"
         try:
-            if self.compress_var.get():
+            do_compress = self.compress_var.get()
+            do_auto_rotate = self.auto_rotate_var.get()
+            manual_rotate = self.manual_rotate_var.get()
+            
+            if do_compress or do_auto_rotate or "Sem rotação" not in manual_rotate:
                 img = Image.open(item['orig_path'])
-                img = ImageOps.exif_transpose(img)
-                # BILINEAR é 3x mais rápido que LANCZOS com qualidade aceitável
-                img.thumbnail((800, 800), Image.Resampling.BILINEAR)
-                img = img.convert("RGB")
-                # optimize=False evita a varredura dupla do JPEG (muito mais rápido)
-                img.save(temp_target, "JPEG", optimize=False, quality=60)
+                
+                # 1. Rotação EXIF Automática
+                if do_auto_rotate:
+                    img = ImageOps.exif_transpose(img)
+                    
+                # 2. Rotação Manual Adicional
+                if "90° Direita" in manual_rotate:
+                    img = img.rotate(-90, expand=True)
+                elif "90° Esquerda" in manual_rotate:
+                    img = img.rotate(90, expand=True)
+                elif "180°" in manual_rotate:
+                    img = img.rotate(180, expand=True)
+                    
+                # 3. Compressão HD ou Gravação Ajustada
+                if do_compress:
+                    img.thumbnail((800, 800), Image.Resampling.BILINEAR)
+                    img = img.convert("RGB")
+                    img.save(temp_target, "JPEG", optimize=False, quality=60)
+                else:
+                    img = img.convert("RGB")
+                    img.save(temp_target, "JPEG", quality=95)
+                    
                 img.close()
             else:
                 shutil.copy2(item['orig_path'], temp_target)
