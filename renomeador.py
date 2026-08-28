@@ -32,7 +32,7 @@ try:
 except ImportError:
     _PYTESSERACT_OK = False
 
-VERSION = "1.8.3" # Fix: Correção de ordem dos blocos (Bloco B 52un primeiro + Bloco A 92un segundo)
+VERSION = "1.9.0" # Feature: Carimbo Data/Hora EXIF + Botão Atualização Topo + Trava Padrão + Botão Desfazer + Utilitários Scrollable
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
@@ -79,8 +79,10 @@ class ToolApp:
         self.sort_order = ctk.StringVar(value="Decrescente (Z-A)")
         self.auto_rotate_var = ctk.BooleanVar(value=True)
         self.manual_rotate_var = ctk.StringVar(value="Sem rotação manual")
+        self.stamp_exif_date_var = ctk.BooleanVar(value=True)
         self.route_profile = ctk.StringVar(value="Padrão (Sem Rota Especial)")
         self.mapping = []
+        self.last_rename_backup = []
         self.last_dir = ""
         self.theme_mode = ctk.StringVar(value="System")
         
@@ -122,8 +124,12 @@ class ToolApp:
         theme_frame.pack(pady=(2, 0))
         ctk.CTkLabel(theme_frame, text="Tema:", font=ctk.CTkFont(size=10), text_color="gray").pack(side="left", padx=(0,4))
         ctk.CTkOptionMenu(theme_frame, variable=self.theme_mode, values=["System", "Light", "Dark"],
-                           command=self.toggle_theme, width=90, height=22,
+                           command=self.toggle_theme, width=80, height=22,
                            font=ctk.CTkFont(size=10), fg_color=self.c_primary, button_color=self.c_primary).pack(side="left")
+        
+        btn_upd = ctk.CTkButton(theme_frame, text="♻️ Atualizações", command=self.check_for_updates,
+                                fg_color=self.c_primary, text_color="white", font=ctk.CTkFont(size=10, weight="bold"), hover_color="#1B5E20", width=105, height=22)
+        btn_upd.pack(side="left", padx=(8, 0))
         
         # 2. SELETOR DE ABAS PRINCIPAL (Muito mais bonito que o Notebook antigo)
         self.tabview = ctk.CTkTabview(self.root, corner_radius=10, segmented_button_selected_color=self.c_primary,
@@ -140,15 +146,11 @@ class ToolApp:
         self.create_utils_tab(self.tabview.tab("🛠️ UTILITÁRIOS"))
         
         # 3. BARRA DE STATUS INFERIOR
-        self.status_bar = ctk.CTkFrame(self.root, height=40, corner_radius=0, fg_color=("gray90", "gray15"))
+        self.status_bar = ctk.CTkFrame(self.root, height=30, corner_radius=0, fg_color=("gray90", "gray15"))
         self.status_bar.pack(fill="x", side="bottom")
         
         ctk.CTkLabel(self.status_bar, text=f"SO: {platform.system()} | Paralelismo Ativado (Motor Rápido)", 
-                     font=ctk.CTkFont(size=11), text_color="gray").pack(side="left", padx=20)
-        
-        btn_upd = ctk.CTkButton(self.status_bar, text="♻️ Baixar Atualizações", command=self.check_for_updates,
-                                fg_color=self.c_primary, text_color="white", font=ctk.CTkFont(size=12, weight="bold"), hover_color="#1B5E20", width=160, height=30)
-        btn_upd.pack(side="right", padx=20, pady=5)
+                     font=ctk.CTkFont(size=11), text_color="gray").pack(side="left", padx=20, pady=4)
         
     def create_img_tab(self, parent):
         parent.columnconfigure(0, weight=1)
@@ -189,25 +191,37 @@ class ToolApp:
         
         ctk.CTkCheckBox(frame_opts, text="Comprimir em HD (Mais Rápido no App)", variable=self.compress_var, text_color=self.c_primary, font=ctk.CTkFont(weight="bold")).pack(side="left")
 
-        # Linha 4: Opções de Rotação (EXIF + Manual)
+        # Linha 4: Opções de Rotação (EXIF + Manual) + Carimbar Data/Hora + Perfil de Rota
         frame_opts_2 = ctk.CTkFrame(frame_config, fg_color="transparent")
         frame_opts_2.grid(row=3, column=0, columnspan=3, sticky="w", pady=(0, 10))
         
-        ctk.CTkCheckBox(frame_opts_2, text="📱 Auto-Corrigir Orientação EXIF", 
-                        variable=self.auto_rotate_var, text_color=self.c_primary, font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(0, 15))
+        ctk.CTkCheckBox(frame_opts_2, text="📱 Auto-Corrigir EXIF", 
+                        variable=self.auto_rotate_var, text_color=self.c_primary, font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(0, 12))
                         
+        ctk.CTkCheckBox(frame_opts_2, text="🏷️ Carimbar Data/Hora EXIF", 
+                        variable=self.stamp_exif_date_var, text_color=self.c_primary, font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(0, 12))
+
         ctk.CTkLabel(frame_opts_2, text="Rotação Manual:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(0,5))
         ctk.CTkComboBox(frame_opts_2, variable=self.manual_rotate_var, 
-                        values=["Sem rotação manual", "Girar 90° Direita ↻", "Girar 90° Esquerda ↺", "Girar 180° 🔄"], width=160).pack(side="left", padx=(0, 15))
+                        values=["Sem rotação manual", "Girar 90° Direita ↻", "Girar 90° Esquerda ↺", "Girar 180° 🔄"], width=150).pack(side="left", padx=(0, 12))
 
         ctk.CTkLabel(frame_opts_2, text="Perfil Condomínio:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(0,5))
         ctk.CTkComboBox(frame_opts_2, variable=self.route_profile, 
-                        values=["Padrão (Sem Rota Especial)", "Contemporâneo"], width=190).pack(side="left")
+                        values=["Padrão (Sem Rota Especial)", "Contemporâneo"], width=180).pack(side="left")
 
-        # Botão Carregar (Grande)
-        self.btn_load = ctk.CTkButton(frame_config, text="1. MONTAR ESTRUTURA DE NOMES", command=self.load_data, 
+        # Linha 5: Botões de Ação
+        frame_action_btns = ctk.CTkFrame(frame_config, fg_color="transparent")
+        frame_action_btns.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(10, 0))
+        frame_action_btns.columnconfigure(0, weight=3)
+        frame_action_btns.columnconfigure(1, weight=1)
+
+        self.btn_load = ctk.CTkButton(frame_action_btns, text="1. MONTAR ESTRUTURA DE NOMES", command=self.load_data, 
                                       fg_color=self.c_primary, text_color="white", font=ctk.CTkFont(size=14, weight="bold"), height=45)
-        self.btn_load.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(10, 0))
+        self.btn_load.grid(row=0, column=0, sticky="ew", padx=(0, 10))
+
+        self.btn_undo = ctk.CTkButton(frame_action_btns, text="⏪ DESFAZER RENOMEAÇÃO", command=self.undo_last_rename, 
+                                      fg_color="#C62828", hover_color="#8E0000", text_color="white", font=ctk.CTkFont(size=12, weight="bold"), height=45, state="disabled")
+        self.btn_undo.grid(row=0, column=1, sticky="ew")
 
 
         # --- BLOCO CENTRAL (Tabela Tkinter Estilizada para CTk) ---
@@ -446,17 +460,21 @@ class ToolApp:
             self.pdf_tree.selection_set(new_item)
 
     def create_utils_tab(self, parent):
-        # Frame scrollável para os cards
         parent.columnconfigure(0, weight=1)
-        parent.columnconfigure(1, weight=1)
+        parent.rowconfigure(0, weight=1)
+        
+        scroll_frame = ctk.CTkScrollableFrame(parent, fg_color="transparent")
+        scroll_frame.pack(fill="both", expand=True)
+        scroll_frame.columnconfigure(0, weight=1)
+        scroll_frame.columnconfigure(1, weight=1)
 
-        ctk.CTkLabel(parent, text="CAIXA DE FERRAMENTAS AVANÇADAS",
+        ctk.CTkLabel(scroll_frame, text="CAIXA DE FERRAMENTAS AVANÇADAS",
                      font=ctk.CTkFont(size=20, weight="bold"), text_color=self.c_primary
                      ).grid(row=0, column=0, columnspan=2, pady=(15, 20))
 
         # Cada card tem: status_label próprio + botão que roda diálogo na main thread
         def build_card(col, row, icon, title, desc, btn_text, cmd):
-            frame = ctk.CTkFrame(parent, corner_radius=15, fg_color="transparent",
+            frame = ctk.CTkFrame(scroll_frame, corner_radius=15, fg_color="transparent",
                                  border_width=2, border_color="gray70")
             frame.grid(row=row, column=col, padx=12, pady=10, sticky="nsew")
             ctk.CTkLabel(frame, text=icon, font=ctk.CTkFont(size=32)).pack(pady=(12,0))
@@ -919,8 +937,10 @@ class ToolApp:
                         self.auto_rotate_var.set(cfg["auto_rotate_var"])
                     if "manual_rotate_var" in cfg:
                         self.manual_rotate_var.set(cfg["manual_rotate_var"])
-                    if "route_profile" in cfg:
-                        self.route_profile.set(cfg["route_profile"])
+                    if "stamp_exif_date_var" in cfg:
+                        self.stamp_exif_date_var.set(cfg["stamp_exif_date_var"])
+                    # Trava de segurança: perfil de condomínio inicia SEMPRE em Padrão
+                    self.route_profile.set("Padrão (Sem Rota Especial)")
         except Exception:
             pass
 
@@ -937,7 +957,7 @@ class ToolApp:
                 "theme_mode": getattr(self, "theme_mode", ctk.StringVar(value="System")).get(),
                 "auto_rotate_var": getattr(self, "auto_rotate_var", ctk.BooleanVar(value=True)).get(),
                 "manual_rotate_var": getattr(self, "manual_rotate_var", ctk.StringVar(value="Sem rotação manual")).get(),
-                "route_profile": getattr(self, "route_profile", ctk.StringVar(value="Padrão (Sem Rota Especial)")).get()
+                "stamp_exif_date_var": getattr(self, "stamp_exif_date_var", ctk.BooleanVar(value=True)).get()
             }
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(cfg, f, indent=4, ensure_ascii=False)
@@ -1180,8 +1200,19 @@ class ToolApp:
         if not self.mapping or self.processing: return
         if not messagebox.askyesno("Confirmar", f"Renomear {len(self.mapping)} arquivos?"): return
             
+        # Guarda backup para permitir desfazer se o usuário clicar no botão vermelho
+        self.last_rename_backup = [
+            {
+                'orig_path': item['orig_path'],
+                'new_path': item['new_path'],
+                'orig_name': item['orig_name'],
+                'new_name': item['new_name']
+            } for item in self.mapping
+        ]
+
         self.processing = True
         self.btn_rename.configure(state="disabled")
+        self.btn_undo.configure(state="disabled")
         self.frame_progress.pack(fill="x", pady=10)
         self.progress.set(0)
         self.lbl_status.configure(text="Iniciando motor turbo (ThreadPool)...")
@@ -1233,14 +1264,62 @@ class ToolApp:
         self.lbl_perc.configure(text=f"{perc_int}%")
         self.lbl_status.configure(text=status)
 
+    def get_exif_date_str(self, img):
+        try:
+            exif = img._getexif()
+            if exif:
+                # 36867: DateTimeOriginal, 306: DateTime
+                dstr = exif.get(36867) or exif.get(306)
+                if dstr:
+                    parts = str(dstr).strip().split(" ")
+                    if len(parts) == 2:
+                        dp = parts[0].split(":")
+                        if len(dp) == 3:
+                            return f"{dp[2]}/{dp[1]}/{dp[0]} {parts[1][:5]}"
+        except Exception:
+            pass
+        return None
+
+    def stamp_date_on_image(self, img, date_text):
+        from PIL import ImageDraw, ImageFont
+        w, h = img.size
+        font_size = max(14, int(h * 0.032))
+        try:
+            font = ImageFont.truetype("arial.ttf", font_size)
+        except Exception:
+            try:
+                font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size)
+            except Exception:
+                font = ImageFont.load_default()
+                
+        draw_temp = ImageDraw.Draw(img)
+        bbox = draw_temp.textbbox((0, 0), date_text, font=font)
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+        
+        margin = int(h * 0.02)
+        x = w - tw - margin - 10
+        y = h - th - margin - 10
+        
+        overlay = Image.new("RGBA", img.size, (255, 255, 255, 0))
+        draw = ImageDraw.Draw(overlay)
+        rect_box = [x - 8, y - 4, x + tw + 8, y + th + 6]
+        draw.rectangle(rect_box, fill=(0, 0, 0, 160))
+        draw.text((x, y), date_text, fill=(255, 255, 255, 255), font=font)
+        
+        img = img.convert("RGBA")
+        img = Image.alpha_composite(img, overlay).convert("RGB")
+        return img
+
     def process_single_image(self, item, index):
         temp_target = item['new_path'] + ".ecotmp"
         try:
             do_compress = self.compress_var.get()
             do_auto_rotate = self.auto_rotate_var.get()
             manual_rotate = self.manual_rotate_var.get()
+            do_stamp = self.stamp_exif_date_var.get()
             
-            if do_compress or do_auto_rotate or "Sem rotação" not in manual_rotate:
+            if do_compress or do_auto_rotate or do_stamp or "Sem rotação" not in manual_rotate:
                 img = Image.open(item['orig_path'])
                 
                 # 1. Rotação EXIF Automática
@@ -1255,7 +1334,13 @@ class ToolApp:
                 elif "180°" in manual_rotate:
                     img = img.rotate(180, expand=True)
                     
-                # 3. Compressão HD ou Gravação Ajustada
+                # 3. Carimbar Data/Hora EXIF
+                if do_stamp:
+                    date_str = self.get_exif_date_str(img)
+                    if date_str:
+                        img = self.stamp_date_on_image(img, date_str)
+                    
+                # 4. Compressão HD ou Gravação Ajustada
                 if do_compress:
                     img.thumbnail((800, 800), Image.Resampling.BILINEAR)
                     img = img.convert("RGB")
@@ -1285,7 +1370,38 @@ class ToolApp:
         
         self.processing = False
         self.frame_progress.pack_forget()
+        if sucessos > 0 and getattr(self, 'last_rename_backup', None):
+            self.btn_undo.configure(state="normal")
         self.reset_preview()
+
+    def undo_last_rename(self):
+        if not getattr(self, 'last_rename_backup', None):
+            messagebox.showwarning("Aviso", "Nenhum histórico de renomeação recente disponível para desfazer.")
+            return
+            
+        folder = self.img_folder.get()
+        if not messagebox.askyesno("Confirmar Reversão", f"Desfazer a última renomeação de {len(self.last_rename_backup)} arquivos em '{os.path.basename(folder)}'?\n\nTodos os arquivos voltarão a ter os seus nomes originais."):
+            return
+            
+        revertidos = 0
+        erros = 0
+        for item in self.last_rename_backup:
+            new_p = item['new_path']
+            orig_p = item['orig_path']
+            if os.path.exists(new_p):
+                try:
+                    if os.path.exists(orig_p) and orig_p != new_p:
+                        os.remove(orig_p)
+                    os.rename(new_p, orig_p)
+                    revertidos += 1
+                except Exception as e:
+                    erros += 1
+                    print(f"Erro ao reverter {item['new_name']}: {e}")
+                    
+        self.last_rename_backup = []
+        self.btn_undo.configure(state="disabled")
+        messagebox.showinfo("Sucesso Total", f"{revertidos} arquivo(s) foram revertidos com sucesso para os nomes originais!")
+        self.load_data()
 
     # ------------------ PDFs ------------------
     def merge_pdfs(self):

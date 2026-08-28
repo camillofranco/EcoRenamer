@@ -1,6 +1,6 @@
 {
-    "version": "1.8.3",
-    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.8.3/EcoRenamer_Win_v1.8.3.zip",
-    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.8.3/EcoRenamer_Mac_v1.8.3.zip",
-    "changelog": "v1.8.3\n- Correção definitiva do perfil Contemporâneo.\n- Ajustada sequência real da câmera (Bloco B primeiro com 52 fotos + Bloco A segundo com 92 fotos).\n- Apto 01 perfeitamente associado à foto do Apto 01."
+    "version": "1.9.0",
+    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.9.0/EcoRenamer_Win_v1.9.0.zip",
+    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.9.0/EcoRenamer_Mac_v1.9.0.zip",
+    "changelog": "v1.9.0\n- 🏷️ Carimbo Automático de Data/Hora EXIF da foto (marca d'água legível da data real em campo).\n- ♻️ Botão de Atualizações movido para o topo (Header) para total visibilidade em notebooks.\n- 🛡️ Trava de segurança: Perfil de Condomínio inicia sempre no modo 'Padrão' por segurança.\n- ⏪ Novo Botão 'DESFAZER RENOMEAÇÃO' (restaura os arquivos originais com 1 clique).\n- 📜 Barra de rolagem scrollável na aba Utilitários para telas menores."
 }
