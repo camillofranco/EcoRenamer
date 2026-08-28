@@ -32,7 +32,7 @@ try:
 except ImportError:
     _PYTESSERACT_OK = False
 
-VERSION = "1.8.2" # Fix: Suporte dinâmico a pastas de 46, 52, 92 e 144 fotos no perfil Contemporâneo
+VERSION = "1.8.3" # Fix: Correção de ordem dos blocos (Bloco B 52un primeiro + Bloco A 92un segundo)
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
@@ -950,22 +950,20 @@ class ToolApp:
 
     def reorder_contemporaneo(self, images):
         total = len(images)
-        if total == 46:
-            return self._reordenar_perna_a(images)
-        elif total == 52:
-            return self._reordenar_bloco_b(images)
+        if total == 144:
+            bloco_b = self._reordenar_bloco_b(images[:52])
+            bloco_a = self._reordenar_bloco_a(images[52:])
+            return bloco_a + bloco_b
         elif total == 92:
             return self._reordenar_bloco_a(images)
-        elif total == 144:
-            bloco_a = self._reordenar_bloco_a(images[:92])
-            bloco_b = self._reordenar_bloco_b(images[92:])
-            return bloco_a + bloco_b
+        elif total == 52:
+            return self._reordenar_bloco_b(images)
         elif total > 92:
-            bloco_a = self._reordenar_bloco_a(images[:92])
-            restante = images[92:]
-            if len(restante) == 52:
-                return bloco_a + self._reordenar_bloco_b(restante)
-            return bloco_a + restante
+            bloco_b = self._reordenar_bloco_b(images[:52])
+            bloco_a = self._reordenar_bloco_a(images[52:144])
+            return bloco_a + bloco_b + images[144:]
+        elif total == 46:
+            return self._reordenar_perna_a(images)
         elif total >= 46:
             perna1 = self._reordenar_perna_a(images[:46])
             restante = images[46:]

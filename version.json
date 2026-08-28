@@ -1,6 +1,6 @@
 {
-    "version": "1.8.2",
-    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.8.2/EcoRenamer_Win_v1.8.2.zip",
-    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.8.2/EcoRenamer_Mac_v1.8.2.zip",
-    "changelog": "v1.8.2\n- Reordenação dinâmica do perfil Contemporâneo para pastas parciais ou completas (46, 52, 92 e 144 fotos).\n- Mapeamento correto de pernas individuais de 46 fotos (Bloco A perna 1/2).\n- Garantia de Apto 01 no topo mesmo em lotes fracionados."
+    "version": "1.8.3",
+    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.8.3/EcoRenamer_Win_v1.8.3.zip",
+    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.8.3/EcoRenamer_Mac_v1.8.3.zip",
+    "changelog": "v1.8.3\n- Correção definitiva do perfil Contemporâneo.\n- Ajustada sequência real da câmera (Bloco B primeiro com 52 fotos + Bloco A segundo com 92 fotos).\n- Apto 01 perfeitamente associado à foto do Apto 01."
 }
