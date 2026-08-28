@@ -32,7 +32,7 @@ try:
 except ImportError:
     _PYTESSERACT_OK = False
 
-VERSION = "1.8.1" # Fix: Ordenação alfanumérica natural em ordem crescente para perfil de rota Contemporâneo
+VERSION = "1.8.2" # Fix: Suporte dinâmico a pastas de 46, 52, 92 e 144 fotos no perfil Contemporâneo
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
@@ -950,10 +950,12 @@ class ToolApp:
 
     def reorder_contemporaneo(self, images):
         total = len(images)
-        if total == 92:
-            return self._reordenar_bloco_a(images)
+        if total == 46:
+            return self._reordenar_perna_a(images)
         elif total == 52:
             return self._reordenar_bloco_b(images)
+        elif total == 92:
+            return self._reordenar_bloco_a(images)
         elif total == 144:
             bloco_a = self._reordenar_bloco_a(images[:92])
             bloco_b = self._reordenar_bloco_b(images[92:])
@@ -964,10 +966,31 @@ class ToolApp:
             if len(restante) == 52:
                 return bloco_a + self._reordenar_bloco_b(restante)
             return bloco_a + restante
+        elif total >= 46:
+            perna1 = self._reordenar_perna_a(images[:46])
+            restante = images[46:]
+            if len(restante) >= 46:
+                return self._reordenar_bloco_a(images[:92]) + restante
+            return perna1 + restante
         return images
 
+    def _reordenar_perna_a(self, fotos_46):
+        if len(fotos_46) < 46: return fotos_46
+        resultado = []
+        # Térreo (as 2 últimas fotos da perna da câmera)
+        resultado.append(fotos_46[45])
+        resultado.append(fotos_46[44])
+        # 1º ao 11º andar em ordem crescente de andares
+        for andar_idx in range(1, 12):
+            start = 44 - (andar_idx * 4)
+            resultado.extend([fotos_46[start+3], fotos_46[start+2], fotos_46[start+1], fotos_46[start]])
+        return resultado
+
     def _reordenar_bloco_a(self, fotos_92):
-        if len(fotos_92) < 92: return fotos_92
+        if len(fotos_92) < 92:
+            if len(fotos_92) >= 46:
+                return self._reordenar_perna_a(fotos_92[:46]) + fotos_92[46:]
+            return fotos_92
         perna1 = fotos_92[:46]
         perna2 = fotos_92[46:]
         mapeamento = {}
