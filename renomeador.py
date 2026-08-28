@@ -32,7 +32,7 @@ try:
 except ImportError:
     _PYTESSERACT_OK = False
 
-VERSION = "1.7.0" # Feature: Auto-correção de rotação EXIF (fotos de celular) + rotação manual
+VERSION = "1.8.0" # Feature: Perfil de Rota de Condomínio (Contemporâneo 144un)
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
@@ -75,6 +75,7 @@ class ToolApp:
         self.sort_order = ctk.StringVar(value="Decrescente (Z-A)")
         self.auto_rotate_var = ctk.BooleanVar(value=True)
         self.manual_rotate_var = ctk.StringVar(value="Sem rotação manual")
+        self.route_profile = ctk.StringVar(value="Padrão (Sem Rota Especial)")
         self.mapping = []
         self.last_dir = ""
         self.theme_mode = ctk.StringVar(value="System")
@@ -188,12 +189,16 @@ class ToolApp:
         frame_opts_2 = ctk.CTkFrame(frame_config, fg_color="transparent")
         frame_opts_2.grid(row=3, column=0, columnspan=3, sticky="w", pady=(0, 10))
         
-        ctk.CTkCheckBox(frame_opts_2, text="📱 Auto-Corrigir Orientação EXIF (Fotos de Celular)", 
-                        variable=self.auto_rotate_var, text_color=self.c_primary, font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(0, 20))
+        ctk.CTkCheckBox(frame_opts_2, text="📱 Auto-Corrigir Orientação EXIF", 
+                        variable=self.auto_rotate_var, text_color=self.c_primary, font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(0, 15))
                         
         ctk.CTkLabel(frame_opts_2, text="Rotação Manual:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(0,5))
         ctk.CTkComboBox(frame_opts_2, variable=self.manual_rotate_var, 
-                        values=["Sem rotação manual", "Girar 90° Direita ↻", "Girar 90° Esquerda ↺", "Girar 180° 🔄"], width=190).pack(side="left")
+                        values=["Sem rotação manual", "Girar 90° Direita ↻", "Girar 90° Esquerda ↺", "Girar 180° 🔄"], width=160).pack(side="left", padx=(0, 15))
+
+        ctk.CTkLabel(frame_opts_2, text="Perfil Condomínio:", font=ctk.CTkFont(weight="bold")).pack(side="left", padx=(0,5))
+        ctk.CTkComboBox(frame_opts_2, variable=self.route_profile, 
+                        values=["Padrão (Sem Rota Especial)", "Contemporâneo"], width=190).pack(side="left")
 
         # Botão Carregar (Grande)
         self.btn_load = ctk.CTkButton(frame_config, text="1. MONTAR ESTRUTURA DE NOMES", command=self.load_data, 
@@ -910,6 +915,8 @@ class ToolApp:
                         self.auto_rotate_var.set(cfg["auto_rotate_var"])
                     if "manual_rotate_var" in cfg:
                         self.manual_rotate_var.set(cfg["manual_rotate_var"])
+                    if "route_profile" in cfg:
+                        self.route_profile.set(cfg["route_profile"])
         except Exception:
             pass
 
@@ -925,7 +932,8 @@ class ToolApp:
                 "last_dir": getattr(self, "last_dir", ""),
                 "theme_mode": getattr(self, "theme_mode", ctk.StringVar(value="System")).get(),
                 "auto_rotate_var": getattr(self, "auto_rotate_var", ctk.BooleanVar(value=True)).get(),
-                "manual_rotate_var": getattr(self, "manual_rotate_var", ctk.StringVar(value="Sem rotação manual")).get()
+                "manual_rotate_var": getattr(self, "manual_rotate_var", ctk.StringVar(value="Sem rotação manual")).get(),
+                "route_profile": getattr(self, "route_profile", ctk.StringVar(value="Padrão (Sem Rota Especial)")).get()
             }
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(cfg, f, indent=4, ensure_ascii=False)
@@ -935,6 +943,68 @@ class ToolApp:
     def toggle_theme(self, choice):
         ctk.set_appearance_mode(choice)
         self.save_config()
+
+    def reorder_contemporaneo(self, images):
+        total = len(images)
+        if total == 92:
+            return self._reordenar_bloco_a(images)
+        elif total == 52:
+            return self._reordenar_bloco_b(images)
+        elif total == 144:
+            bloco_a = self._reordenar_bloco_a(images[:92])
+            bloco_b = self._reordenar_bloco_b(images[92:])
+            return bloco_a + bloco_b
+        elif total > 92:
+            bloco_a = self._reordenar_bloco_a(images[:92])
+            restante = images[92:]
+            if len(restante) == 52:
+                return bloco_a + self._reordenar_bloco_b(restante)
+            return bloco_a + restante
+        return images
+
+    def _reordenar_bloco_a(self, fotos_92):
+        if len(fotos_92) < 92: return fotos_92
+        perna1 = fotos_92[:46]
+        perna2 = fotos_92[46:]
+        mapeamento = {}
+        idx = 0
+        for andar in range(11, 0, -1):
+            for final in [8, 7, 6, 5]:
+                mapeamento[(andar, final)] = perna1[idx]
+                idx += 1
+        mapeamento[(0, 8)] = perna1[idx]
+        mapeamento[(0, 7)] = perna1[idx+1]
+        idx = 0
+        for andar in range(11, 0, -1):
+            for final in [4, 3, 2, 1]:
+                mapeamento[(andar, final)] = perna2[idx]
+                idx += 1
+        mapeamento[(0, 2)] = perna2[idx]
+        mapeamento[(0, 1)] = perna2[idx+1]
+        
+        resultado = []
+        resultado.append(mapeamento[(0, 1)])
+        resultado.append(mapeamento[(0, 2)])
+        resultado.append(mapeamento[(0, 7)])
+        resultado.append(mapeamento[(0, 8)])
+        for andar in range(1, 12):
+            for final in range(1, 9):
+                resultado.append(mapeamento[(andar, final)])
+        return resultado
+
+    def _reordenar_bloco_b(self, fotos_52):
+        if len(fotos_52) < 52: return fotos_52
+        mapeamento = {}
+        idx = 0
+        for andar in range(12, -1, -1):
+            for final in [4, 3, 2, 1]:
+                mapeamento[(andar, final)] = fotos_52[idx]
+                idx += 1
+        resultado = []
+        for andar in range(0, 13):
+            for final in [1, 2, 3, 4]:
+                resultado.append(mapeamento[(andar, final)])
+        return resultado
 
     def update_tree_stats(self):
         if not hasattr(self, 'lbl_tree_stats'):
@@ -997,6 +1067,11 @@ class ToolApp:
         ordem = self.sort_order.get()
         if "Decrescente" in ordem: images.sort(reverse=True)
         else: images.sort(reverse=False)
+        
+        # Aplica o Perfil de Rota de Condomínio se selecionado
+        profile = self.route_profile.get()
+        if "Contemporâneo" in profile:
+            images = self.reorder_contemporaneo(images)
         
         excel_img_values = []
         if excel_path:
