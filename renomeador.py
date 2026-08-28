@@ -32,11 +32,15 @@ try:
 except ImportError:
     _PYTESSERACT_OK = False
 
-VERSION = "1.8.0" # Feature: Perfil de Rota de Condomínio (Contemporâneo 144un)
+VERSION = "1.8.1" # Fix: Ordenação alfanumérica natural em ordem crescente para perfil de rota Contemporâneo
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
 CONFIG_FILE = os.path.expanduser("~/.ecowave_renamer_config.json")
+
+def natural_sort_key(s):
+    import re
+    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]
 
 def resource_path(relative_path):
     try:
@@ -1064,14 +1068,14 @@ class ToolApp:
             messagebox.showwarning("Aviso", "Nenhuma imagem válida encontrada.")
             return
             
-        ordem = self.sort_order.get()
-        if "Decrescente" in ordem: images.sort(reverse=True)
-        else: images.sort(reverse=False)
-        
-        # Aplica o Perfil de Rota de Condomínio se selecionado
         profile = self.route_profile.get()
         if "Contemporâneo" in profile:
+            images.sort(key=natural_sort_key)
             images = self.reorder_contemporaneo(images)
+        else:
+            ordem = self.sort_order.get()
+            if "Decrescente" in ordem: images.sort(key=natural_sort_key, reverse=True)
+            else: images.sort(key=natural_sort_key, reverse=False)
         
         excel_img_values = []
         if excel_path:

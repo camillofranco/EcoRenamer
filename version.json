@@ -1,6 +1,6 @@
 {
-    "version": "1.8.0",
-    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.8.0/EcoRenamer_Win_v1.8.0.zip",
-    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.8.0/EcoRenamer_Mac_v1.8.0.zip",
-    "changelog": "v1.8.0\n- Perfil de Rota por Condomínio: Adicionado perfil 'Contemporâneo' (144 unidades).\n- Reordenação automática do percurso de câmera invertido (Bloco A e Bloco B).\n- Organização instantânea por andar e final para casar com a sequência do Excel."
+    "version": "1.8.1",
+    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.8.1/EcoRenamer_Win_v1.8.1.zip",
+    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.8.1/EcoRenamer_Mac_v1.8.1.zip",
+    "changelog": "v1.8.1\n- Correção na ordenação das fotos da câmera para o perfil Contemporâneo.\n- Garantia de ordenação alfanumérica natural crescente (01.JPG..92.JPG) antes da rota do condomínio.\n- Imagens do Apto 01 passam a ficar perfeitamente no topo da tabela."
 }
