@@ -1,6 +1,6 @@
 {
-    "version": "1.9.0",
-    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.9.0/EcoRenamer_Win_v1.9.0.zip",
-    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.9.0/EcoRenamer_Mac_v1.9.0.zip",
-    "changelog": "v1.9.0\n- 🏷️ Carimbo Automático de Data/Hora EXIF da foto (marca d'água legível da data real em campo).\n- ♻️ Botão de Atualizações movido para o topo (Header) para total visibilidade em notebooks.\n- 🛡️ Trava de segurança: Perfil de Condomínio inicia sempre no modo 'Padrão' por segurança.\n- ⏪ Novo Botão 'DESFAZER RENOMEAÇÃO' (restaura os arquivos originais com 1 clique).\n- 📜 Barra de rolagem scrollável na aba Utilitários para telas menores."
+    "version": "1.9.1",
+    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.9.1/EcoRenamer_Win_v1.9.1.zip",
+    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.9.1/EcoRenamer_Mac_v1.9.1.zip",
+    "changelog": "v1.9.1\n- 📸 Novo utilitário para comprimir fotos sem renomear arquivos JPG/JPEG.\n- 🗂️ Fotos comprimidas são salvas em pasta separada; os originais permanecem intactos.\n- 🔄 Arquivos PNG/HEIC mantêm o nome base e são convertidos para JPG."
 }

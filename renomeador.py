@@ -18,7 +18,8 @@ import sys
 import base64
 import re
 import tempfile
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from compressao_fotos import PHOTO_EXTENSIONS, compressed_name, compress_photo, save_compressed_jpeg
 import pdfplumber
 from pdf2docx import Converter
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle
@@ -32,7 +33,7 @@ try:
 except ImportError:
     _PYTESSERACT_OK = False
 
-VERSION = "1.9.0" # Feature: Carimbo Data/Hora EXIF + Botão Atualização Topo + Trava Padrão + Botão Desfazer + Utilitários Scrollable
+VERSION = "1.9.1" # Utilitário de compressão de fotos sem renomeação
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
@@ -509,6 +510,9 @@ class ToolApp:
         build_card(0, 3, "✂️", "Dividir PDF",
                    "Separa cada página de um PDF em arquivos individuais numa pasta.",
                    "Separar Páginas", self.do_split_pdf)
+        build_card(1, 3, "📸", "Comprimir Fotos",
+                   "Comprime fotos numa nova pasta, sem alterar os arquivos originais. JPG/JPEG mantêm o nome.",
+                   "Comprimir sem renomear", self.do_compress_photos)
 
     # ----------- Helpers thread-safe -----------
     def _show_info(self, title, msg):
@@ -524,6 +528,101 @@ class ToolApp:
             if pval is not None:
                 prog.set(pval)
         self.root.after(0, _do)
+
+    def do_compress_photos(self, status_lbl, prog):
+        if self.processing:
+            messagebox.showwarning("Aguarde", "Já há um processamento de imagens em andamento.")
+            return
+        folder = filedialog.askdirectory(
+            title="Selecione a pasta com as fotos para comprimir",
+            initialdir=self.get_initial_dir(self.img_folder.get()),
+        )
+        if not folder:
+            return
+
+        photos = sorted(
+            (name for name in os.listdir(folder)
+             if os.path.isfile(os.path.join(folder, name))
+             and os.path.splitext(name)[1].lower() in PHOTO_EXTENSIONS),
+            key=natural_sort_key,
+        )
+        if not photos:
+            messagebox.showwarning("Nenhuma foto", "A pasta não contém fotos JPG, JPEG, PNG ou HEIC.")
+            return
+
+        targets = [compressed_name(name) for name in photos]
+        if len({name.casefold() for name in targets}) != len(targets):
+            messagebox.showerror(
+                "Nomes em conflito",
+                "Há fotos que teriam o mesmo nome após converter PNG/HEIC para JPG. "
+                "Separe esses arquivos antes de comprimir.",
+            )
+            return
+
+        converted = sum(os.path.splitext(name)[1].lower() not in {".jpg", ".jpeg"} for name in photos)
+        note = (f"\n{converted} foto(s) PNG/HEIC terão somente a extensão alterada para .JPG."
+                if converted else "")
+        if not messagebox.askyesno(
+            "Confirmar compressão",
+            f"Comprimir {len(photos)} foto(s) em uma nova pasta dentro de:\n{folder}\n\n"
+            f"Os arquivos originais serão preservados.{note}",
+        ):
+            return
+
+        output_folder = os.path.join(folder, "Fotos_Comprimidas")
+        suffix = 2
+        while os.path.exists(output_folder):
+            output_folder = os.path.join(folder, f"Fotos_Comprimidas_{suffix}")
+            suffix += 1
+        try:
+            os.makedirs(output_folder)
+        except OSError as error:
+            messagebox.showerror("Erro", f"Não foi possível criar a pasta de destino:\n{error}")
+            return
+
+        self.processing = True
+        self.last_dir = folder
+        self._set_status(status_lbl, prog, "Comprimindo fotos...", 0)
+        threading.Thread(
+            target=self._bg_compress_photos,
+            args=(folder, output_folder, photos, status_lbl, prog),
+            daemon=True,
+        ).start()
+
+    def _bg_compress_photos(self, folder, output_folder, photos, status_lbl, prog):
+        errors = []
+        successes = 0
+        with ThreadPoolExecutor() as executor:
+            futures = {
+                executor.submit(
+                    compress_photo,
+                    os.path.join(folder, name),
+                    os.path.join(output_folder, compressed_name(name)),
+                ): name for name in photos
+            }
+            for completed, future in enumerate(as_completed(futures), 1):
+                try:
+                    future.result()
+                    successes += 1
+                except Exception as error:
+                    errors.append(f"{futures[future]}: {error}")
+                self._set_status(
+                    status_lbl, prog,
+                    f"Comprimindo fotos... {completed}/{len(photos)}",
+                    completed / len(photos),
+                )
+
+        def finish():
+            self.processing = False
+            status_lbl.configure(text=f"Concluído: {successes} foto(s); {len(errors)} falha(s).")
+            message = (f"{successes} foto(s) comprimida(s) em:\n{output_folder}\n\n"
+                       "Os arquivos originais foram preservados.")
+            if errors:
+                messagebox.showwarning("Compressão concluída com falhas",
+                                       message + "\n\nErros:\n" + "\n".join(errors[:5]))
+            else:
+                messagebox.showinfo("Compressão concluída", message)
+        self.root.after(0, finish)
 
     # ----------- Motor 1: PDF → Word -----------
     def do_pdf_to_word(self, status_lbl, prog):
@@ -1342,9 +1441,7 @@ class ToolApp:
                     
                 # 4. Compressão HD ou Gravação Ajustada
                 if do_compress:
-                    img.thumbnail((800, 800), Image.Resampling.BILINEAR)
-                    img = img.convert("RGB")
-                    img.save(temp_target, "JPEG", optimize=False, quality=60)
+                    save_compressed_jpeg(img, temp_target)
                 else:
                     img = img.convert("RGB")
                     img.save(temp_target, "JPEG", quality=95)

@@ -1,4 +1,4 @@
-# 🌿 EcoRenamer Pro v1.4.5 (Enterprise Edition)
+# 🌿 EcoRenamer Pro v1.9.1 (Enterprise Edition)
 
 O **EcoRenamer Pro** é um assistente de produtividade empresarial desenvolvido para automação de gestão de arquivos e conversões avançadas. Esta versão **Clean Edition** foi otimizada para oferecer o máximo desempenho, privacidade e facilidade de uso, com processamento 100% local.
 
@@ -22,19 +22,20 @@ O **EcoRenamer Pro** é um assistente de produtividade empresarial desenvolvido 
 - **Excel para PDF**: Gera relatórios PDF profissionais a partir de tabelas Excel.
 - **PDF para Excel**: Extrai tabelas integradas de PDFs para análise de dados.
 - **Fotos para PDF**: Cria álbuns PDF de alta qualidade a partir de fotos (JPG/PNG/HEIF), respeitando a rotação correta da câmera.
+- **Comprimir Fotos**: Selecione uma pasta na aba **Utilitários** e clique em **Comprimir sem renomear**. O app cria `Fotos_Comprimidas` (ou uma pasta numerada, se ela já existir), reduz as fotos para até 800×800 pixels e usa a mesma qualidade JPEG 60 do renomeador. Os originais ficam intactos. Arquivos JPG/JPEG conservam o nome completo; PNG/HEIC conservam o nome base e passam a ter extensão `.JPG`. Se dois arquivos produziriam o mesmo nome, o app avisa antes de começar.
 
 ## 🚀 Instalação e Execução
 
 O EcoRenamer Pro é um aplicativo portátil disponível para as principais plataformas.
 
 ### 🍏 MacOS
-1. Baixe o arquivo `EcoRenamer_Mac_v1.4.5.zip` nas [Releases](https://github.com/camillofranco/EcoRenamer/releases).
+1. Baixe o arquivo `EcoRenamer_Mac_v1.9.1.zip` nas [Releases](https://github.com/camillofranco/EcoRenamer/releases).
 2. Extraia e mova o `RenomeadorApp.app` para sua pasta de Aplicativos.
 3. Se o Mac bloquear a abertura por ser de um "Desenvolvedor não Identificado":
    - Botão direito no App > Abrir > Confirmar.
 
 ### 🪟 Windows
-1. Baixe o `EcoRenamer_Win_v1.4.5.zip`.
+1. Baixe o `EcoRenamer_Win_v1.9.1.zip`.
 2. Extraia e execute o `RenomeadorApp.exe`.
 
 ## 📦 Como Compilar (Para Desenvolvedores)
@@ -57,4 +58,4 @@ O aplicativo possui um verificador de versão integrado. Sempre que houver uma n
 
 ---
 **Desenvolvido por EcoWave Tech**
-*Versão v1.4.5 - Edição Estável & Privada*
+*Versão v1.9.1 - Edição Estável & Privada*
