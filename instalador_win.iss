@@ -1,10 +1,10 @@
 [Setup]
 AppName=EcoRenamer Pro
-AppVersion=1.4.4
+AppVersion=1.9.1
 DefaultDirName={autopf}\EcoRenamerPro
 DefaultGroupName=EcoRenamer Pro
 OutputDir=Output
-OutputBaseFilename=Setup_EcoRenamer_v1.4.4
+OutputBaseFilename=Setup_EcoRenamer_v1.9.1
 Compression=lzma2
 SolidCompression=yes
 SetupIconFile=icon.ico

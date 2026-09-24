@@ -3,7 +3,7 @@ setlocal
 cd /d %~dp0
 
 echo ==========================================================
-echo       🏗️ COMPILADOR ECOWAVE PRO v1.4.5 (WIN - CLEAN)
+echo       🏗️ COMPILADOR ECOWAVE PRO v1.9.1 (WIN - CLEAN)
 echo ==========================================================
 
 echo 1. Limpando pastas antigas...
@@ -34,9 +34,9 @@ pyinstaller --noconfirm --windowed --noconsole --name "RenomeadorApp" --icon "ic
 renomeador.py
 
 echo 6. Finalizando e criando Zip...
-powershell -Command "Compress-Archive -Path 'dist\RenomeadorApp\*' -DestinationPath 'EcoRenamer_Win_v1.4.5.zip' -Force"
+powershell -Command "Compress-Archive -Path 'dist\RenomeadorApp\*' -DestinationPath 'EcoRenamer_Win_v1.9.1.zip' -Force"
 
 echo --------------------------------------------------------
-echo ✅ SUCESSO! Versão 1.4.5 (Limpa) gerada.
+echo ✅ SUCESSO! Versão 1.9.1 (Limpa) gerada.
 echo --------------------------------------------------------
 pause

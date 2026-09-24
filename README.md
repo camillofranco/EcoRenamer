@@ -1,4 +1,4 @@
-# 🌿 EcoRenamer Pro v1.4.5 (Enterprise Edition)
+# 🌿 EcoRenamer Pro v1.9.1 (Enterprise Edition)
 
 O **EcoRenamer Pro** é um assistente de produtividade empresarial desenvolvido para automação de gestão de arquivos e conversões avançadas. Esta versão **Clean Edition** foi otimizada para oferecer o máximo desempenho, privacidade e facilidade de uso, com processamento 100% local.
 
@@ -29,13 +29,13 @@ O **EcoRenamer Pro** é um assistente de produtividade empresarial desenvolvido 
 O EcoRenamer Pro é um aplicativo portátil disponível para as principais plataformas.
 
 ### 🍏 MacOS
-1. Baixe o arquivo `EcoRenamer_Mac_v1.4.5.zip` nas [Releases](https://github.com/camillofranco/EcoRenamer/releases).
+1. Baixe o arquivo `EcoRenamer_Mac_v1.9.1.zip` nas [Releases](https://github.com/camillofranco/EcoRenamer/releases).
 2. Extraia e mova o `RenomeadorApp.app` para sua pasta de Aplicativos.
 3. Se o Mac bloquear a abertura por ser de um "Desenvolvedor não Identificado":
    - Botão direito no App > Abrir > Confirmar.
 
 ### 🪟 Windows
-1. Baixe o `EcoRenamer_Win_v1.4.5.zip`.
+1. Baixe o `EcoRenamer_Win_v1.9.1.zip`.
 2. Extraia e execute o `RenomeadorApp.exe`.
 
 ## 📦 Como Compilar (Para Desenvolvedores)
@@ -58,4 +58,4 @@ O aplicativo possui um verificador de versão integrado. Sempre que houver uma n
 
 ---
 **Desenvolvido por EcoWave Tech**
-*Versão v1.4.5 - Edição Estável & Privada*
+*Versão v1.9.1 - Edição Estável & Privada*

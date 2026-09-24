@@ -33,7 +33,7 @@ try:
 except ImportError:
     _PYTESSERACT_OK = False
 
-VERSION = "1.9.0" # Feature: Carimbo Data/Hora EXIF + Botão Atualização Topo + Trava Padrão + Botão Desfazer + Utilitários Scrollable
+VERSION = "1.9.1" # Utilitário de compressão de fotos sem renomeação
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
 
