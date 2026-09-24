@@ -3,7 +3,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$DIR"
 
 echo "=========================================================="
-echo "      🏗️ COMPILADOR ECOWAVE PRO v1.9.1 (MACOS - CLEAN)"
+echo "      🏗️ COMPILADOR ECOWAVE PRO v1.9.2 (MACOS - CLEAN)"
 echo "=========================================================="
 
 echo "1. Limpando pastas antigas..."
@@ -15,7 +15,7 @@ source venv/bin/activate
 
 echo "3. Instalando dependências estáveis..."
 pip install --upgrade pip
-pip install openpyxl pillow pillow-heif pymupdf pyinstaller customtkinter darkdetect pdf2docx pdfplumber reportlab pytesseract python-docx
+pip install openpyxl pillow pillow-heif pymupdf pyinstaller customtkinter darkdetect pdf2docx pdfplumber reportlab pytesseract python-docx certifi
 
 echo "4. Verificando Tesseract OCR..."
 if ! command -v tesseract &>/dev/null; then
@@ -47,10 +47,10 @@ fi
 
 echo "7. Finalizando e criando pacote Zip..."
 cd dist
-zip -ry ../EcoRenamer_Mac_v1.9.1.zip RenomeadorApp.app
+zip -ry ../EcoRenamer_Mac_v1.9.2.zip RenomeadorApp.app
 cd ..
 
 echo "--------------------------------------------------------"
-echo "✅ SUCESSO! Versão 1.9.1 (Limpa) gerada."
+echo "✅ SUCESSO! Versão 1.9.2 (Limpa) gerada."
 echo "--------------------------------------------------------"
 deactivate

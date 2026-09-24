@@ -18,6 +18,8 @@ import sys
 import base64
 import re
 import tempfile
+import ssl
+import shlex
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from compressao_fotos import PHOTO_EXTENSIONS, compressed_name, compress_photo, save_compressed_jpeg
 import pdfplumber
@@ -33,9 +35,32 @@ try:
 except ImportError:
     _PYTESSERACT_OK = False
 
-VERSION = "1.9.1" # Utilitário de compressão de fotos sem renomeação
+VERSION = "1.9.2" # Correção da verificação e instalação de atualizações
 UPDATE_URL = "https://raw.githubusercontent.com/camillofranco/EcoRenamer/main/version.json"
 REFS_URL = "https://github.com/camillofranco/EcoRenamer/releases"
+
+try:
+    import certifi
+except ImportError:
+    certifi = None
+
+
+def update_ssl_context():
+    """Usa uma lista de certificados incluída no app compilado, quando disponível."""
+    return ssl.create_default_context(cafile=certifi.where() if certifi else None)
+
+
+def version_parts(version):
+    return tuple(int(part) for part in str(version).split("."))
+
+
+def fetch_update_info():
+    with urllib.request.urlopen(UPDATE_URL, timeout=10, context=update_ssl_context()) as response:
+        data = json.load(response)
+    if not isinstance(data, dict) or not data.get("version"):
+        raise ValueError("O servidor retornou uma versão inválida.")
+    version_parts(data["version"])
+    return data
 
 CONFIG_FILE = os.path.expanduser("~/.ecowave_renamer_config.json")
 
@@ -128,9 +153,9 @@ class ToolApp:
                            command=self.toggle_theme, width=80, height=22,
                            font=ctk.CTkFont(size=10), fg_color=self.c_primary, button_color=self.c_primary).pack(side="left")
         
-        btn_upd = ctk.CTkButton(theme_frame, text="♻️ Atualizações", command=self.check_for_updates,
+        self.btn_update = ctk.CTkButton(theme_frame, text="♻️ Atualizações", command=self.check_for_updates,
                                 fg_color=self.c_primary, text_color="white", font=ctk.CTkFont(size=10, weight="bold"), hover_color="#1B5E20", width=105, height=22)
-        btn_upd.pack(side="left", padx=(8, 0))
+        self.btn_update.pack(side="left", padx=(8, 0))
         
         # 2. SELETOR DE ABAS PRINCIPAL (Muito mais bonito que o Notebook antigo)
         self.tabview = ctk.CTkTabview(self.root, corner_radius=10, segmented_button_selected_color=self.c_primary,
@@ -1560,58 +1585,84 @@ class ToolApp:
             ))
 
     def check_for_updates(self):
+        if getattr(self, "checking_updates", False) or getattr(self, "updating", False):
+            return
+        self.checking_updates = True
+        self.btn_update.configure(text="Verificando...", state="disabled")
+        threading.Thread(target=self._check_for_updates_worker, daemon=True).start()
+
+    def _check_for_updates_worker(self):
         try:
-            with urllib.request.urlopen(UPDATE_URL, timeout=5) as r:
-                data = json.loads(r.read().decode())
-                remote_ver = data.get("version", VERSION)
-                if remote_ver > VERSION:
-                    msg = f"Nova versão encontrada: v{remote_ver}\nMudanças: {data.get('changelog')}\n\nDeseja fechar, instalar silenciosamente e reiniciar agora?"
-                    if messagebox.askyesno("Atualização Pronta", msg):
-                        os_name = platform.system()
-                        url = data.get("download_url_mac") if os_name == "Darwin" else data.get("download_url_win")
-                        if url: threading.Thread(target=self.run_auto_update, args=(url, remote_ver), daemon=True).start()
-                        else: messagebox.showinfo("Erro", "URL de instalação não encontrada no servidor.")
-                else: messagebox.showinfo("App em Dia", "Você já está rodando a última Enterprise Edition.")
-        except: pass
+            data = fetch_update_info()
+            self.root.after(0, self._show_update_result, data, None)
+        except Exception as error:
+            self.root.after(0, self._show_update_result, None, str(error))
+
+    def _show_update_result(self, data, error):
+        self.checking_updates = False
+        self.btn_update.configure(text="♻️ Atualizações", state="normal")
+        if error:
+            if messagebox.askyesno(
+                "Falha na verificação",
+                f"Não foi possível consultar a atualização:\n{error}\n\n"
+                "Deseja abrir a página de downloads no navegador?",
+            ):
+                webbrowser.open(REFS_URL)
+            return
+
+        remote_ver = data["version"]
+        if version_parts(remote_ver) <= version_parts(VERSION):
+            messagebox.showinfo("App em dia", f"Você já está usando a versão v{VERSION}.")
+            return
+
+        url = data.get("download_url_mac" if platform.system() == "Darwin" else "download_url_win")
+        if not url:
+            messagebox.showerror("Erro", "A nova versão não possui link de download para este sistema.")
+            return
+        if platform.system() == "Darwin" and "/AppTranslocation/" in sys.executable:
+            messagebox.showwarning(
+                "Instalação manual necessária",
+                "O macOS abriu este aplicativo em uma cópia temporária. "
+                "Instale a nova versão na pasta Aplicativos e abra-a de lá. "
+                "A página de download será aberta no navegador.",
+            )
+            webbrowser.open(url)
+            return
+
+        msg = (f"Nova versão encontrada: v{remote_ver}\n\n{data.get('changelog', '')}\n\n"
+               "Deseja baixar, instalar e reiniciar o aplicativo agora?")
+        if messagebox.askyesno("Atualização disponível", msg):
+            self.updating = True
+            self.btn_update.configure(state="disabled", text="Atualizando...")
+            self.btn_rename.configure(state="disabled")
+            self.btn_load.configure(state="disabled")
+            self.frame_progress.pack(fill="x", pady=10)
+            self.progress.set(0)
+            self.lbl_perc.configure(text="0%")
+            self.lbl_status.configure(text=f"Preparando download da v{remote_ver}...")
+            threading.Thread(target=self.run_auto_update, args=(url, remote_ver), daemon=True).start()
 
     def run_auto_update(self, url, version):
-        # UI Freeze de Download
-        self.btn_rename.configure(state="disabled")
-        try: self.btn_load.configure(state="disabled")
-        except: pass
-        self.frame_progress.pack(fill="x", pady=10)
-        self.lbl_status.configure(text=f"Preparando download da v{version}...")
-        self.progress.set(0)
-        self.lbl_perc.configure(text="0%")
-        
         try:
-            # Bypass de SSL para evitar erros de certificado no Mac
-            import ssl
-            context = ssl._create_unverified_context()
-            
             temp_dir = os.path.join(os.path.expanduser("~"), ".ecowave_update_tmp")
             if os.path.exists(temp_dir): shutil.rmtree(temp_dir)
             os.makedirs(temp_dir)
             
             zpath = os.path.join(temp_dir, "u.zip")
-            
-            # Função de callback para progresso real
-            def progress_hook(count, block_size, total_size):
-                if total_size > 0:
-                    perc = (count * block_size) / total_size
-                    if perc > 1.0: perc = 1.0
-                    self.root.after(0, lambda: (
-                        self.progress.set(perc),
-                        self.lbl_perc.configure(text=f"{int(perc*100)}%"),
-                        self.lbl_status.configure(text=f"Baixando atualização... ({self.format_size(count*block_size)} / {self.format_size(total_size)})")
-                    ))
+            self.root.after(0, lambda: self.lbl_status.configure(text="Baixando atualização do GitHub..."))
+            with urllib.request.urlopen(url, timeout=30, context=update_ssl_context()) as response, open(zpath, "wb") as output:
+                total = int(response.headers.get("Content-Length", 0))
+                downloaded = 0
+                while chunk := response.read(1024 * 1024):
+                    output.write(chunk)
+                    downloaded += len(chunk)
+                    if total:
+                        progress = min(downloaded / total, 1.0)
+                        self.root.after(0, self.update_ui_progress, progress, int(progress * 100),
+                                        f"Baixando atualização... ({self.format_size(downloaded)} / {self.format_size(total)})")
 
-            # Custom Opener para usar o contexto SSL
-            opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=context))
-            urllib.request.install_opener(opener)
-            
-            self.root.after(0, lambda: self.lbl_status.configure(text="Iniciando download seguro com GitHub..."))
-            urllib.request.urlretrieve(url, zpath, reporthook=progress_hook)
+            if not zipfile.is_zipfile(zpath):
+                raise ValueError("O download não é um arquivo ZIP válido.")
             
             self.root.after(0, lambda: (
                 self.lbl_status.configure(text="Descompactando pacote de atualização..."),
@@ -1628,8 +1679,8 @@ class ToolApp:
             # Bloqueio caso seja rodado via Python Raw
             is_frozen = getattr(sys, 'frozen', False)
             if not is_frozen:
-                messagebox.showinfo("Dev Mode", "Instalador baixado, mas ignorado pois não é um executável compilado (.app ou .exe).")
-                self.frame_progress.pack_forget()
+                self.root.after(0, self._update_failed,
+                                "A instalação automática só funciona no aplicativo compilado.")
                 return
                 
             os_name = platform.system()
@@ -1641,20 +1692,18 @@ class ToolApp:
                 new_app_extracted = os.path.join(temp_dir, "RenomeadorApp.app")
                 
                 # TRAVA DE SEGURANÇA: NUNCA subscrever se não for um .app real
-                if not app_path.endswith(".app"):
-                    messagebox.showerror("Erro de Segurança Crítico", f"O atualizador tentou sobrescrever um diretório inválido:\n{app_path}\nAtualização Abortada pelo Sistema de Defesa.")
-                    self.frame_progress.pack_forget()
-                    return
+                if not app_path.endswith(".app") or "/AppTranslocation/" in app_path:
+                    raise ValueError(f"Local de instalação inválido: {app_path}")
+                if not os.path.isdir(new_app_extracted):
+                    raise ValueError("O pacote não contém RenomeadorApp.app.")
                 
                 script_sh = os.path.join(temp_dir, "updater.command")
                 with open(script_sh, "w") as f:
-                    f.write("#!/bin/bash\n")
+                    f.write("#!/bin/bash\nset -e\n")
                     f.write("sleep 2\n") # Tempo pro App fechar e liberar a pasta
-                    # FLAG --delete FOI REMOVIDA PARA SEMPRE! Apenas substitui novos arquivos sem excluir nada em volta.
-                    f.write(f"rsync -a '{new_app_extracted}/' '{app_path}/'\n") 
-                    f.write(f"xattr -cr '{app_path}'\n") # BURACO NO GATEKEEPER: Remove quarentena
-                    f.write(f"open '{app_path}'\n") # Reinicia
-                    f.write(f"rm -rf '{temp_dir}'\n") # Limpeza ninja do zips
+                    f.write(f"rsync -a {shlex.quote(new_app_extracted + '/')} {shlex.quote(app_path + '/')}\n")
+                    f.write(f"open {shlex.quote(app_path)}\n")
+                    f.write(f"rm -rf {shlex.quote(temp_dir)}\n")
                     f.write("rm -- \"$0\"\n") # Auto-destrói o script sh
                     
                 os.chmod(script_sh, 0o755)
@@ -1690,9 +1739,21 @@ class ToolApp:
                 # os._exit() encerra o processo INTEIRO (inclusive o loop do tkinter)
                 self.root.after(0, lambda: os._exit(0))
                 
-        except Exception as e:
-            messagebox.showerror("Erro Crítico de Instalação", f"Falha ao realizar 'Seamless Update':\n\n{e}")
-            self.frame_progress.pack_forget()
+        except Exception as error:
+            self.root.after(0, self._update_failed, str(error))
+
+    def _update_failed(self, error):
+        self.updating = False
+        self.btn_update.configure(state="normal", text="♻️ Atualizações")
+        self.frame_progress.pack_forget()
+        self.btn_load.configure(state="normal")
+        self.btn_rename.configure(state="normal" if self.mapping else "disabled")
+        if messagebox.askyesno(
+            "Falha na instalação",
+            f"A atualização não foi concluída:\n{error}\n\n"
+            "Deseja abrir a página de downloads no navegador?",
+        ):
+            webbrowser.open(REFS_URL)
 
 
 if __name__ == "__main__":
