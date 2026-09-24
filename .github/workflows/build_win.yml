@@ -19,7 +19,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install openpyxl pillow pillow-heif pymupdf pyinstaller customtkinter darkdetect pdf2docx pdfplumber reportlab pytesseract google-generativeai openai anthropic
+        pip install openpyxl pillow pillow-heif pymupdf pyinstaller customtkinter darkdetect pdf2docx pdfplumber reportlab pytesseract google-generativeai openai anthropic certifi
         
     - name: Install Tesseract OCR
       run: choco install tesseract -y

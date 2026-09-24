@@ -3,7 +3,7 @@ setlocal
 cd /d %~dp0
 
 echo ==========================================================
-echo       🏗️ COMPILADOR ECOWAVE PRO v1.9.1 (WIN - CLEAN)
+echo       🏗️ COMPILADOR ECOWAVE PRO v1.9.2 (WIN - CLEAN)
 echo ==========================================================
 
 echo 1. Limpando pastas antigas...
@@ -19,7 +19,7 @@ call venv\Scripts\activate.bat
 
 echo 3. Instalando dependências estáveis...
 python -m pip install --upgrade pip
-pip install openpyxl pillow pillow-heif pymupdf pyinstaller customtkinter darkdetect pdf2docx pdfplumber reportlab pytesseract python-docx
+pip install openpyxl pillow pillow-heif pymupdf pyinstaller customtkinter darkdetect pdf2docx pdfplumber reportlab pytesseract python-docx certifi
 
 echo 4. Verificando Tesseract OCR...
 where tesseract >nul 2>&1
@@ -34,9 +34,9 @@ pyinstaller --noconfirm --windowed --noconsole --name "RenomeadorApp" --icon "ic
 renomeador.py
 
 echo 6. Finalizando e criando Zip...
-powershell -Command "Compress-Archive -Path 'dist\RenomeadorApp\*' -DestinationPath 'EcoRenamer_Win_v1.9.1.zip' -Force"
+powershell -Command "Compress-Archive -Path 'dist\RenomeadorApp\*' -DestinationPath 'EcoRenamer_Win_v1.9.2.zip' -Force"
 
 echo --------------------------------------------------------
-echo ✅ SUCESSO! Versão 1.9.1 (Limpa) gerada.
+echo ✅ SUCESSO! Versão 1.9.2 (Limpa) gerada.
 echo --------------------------------------------------------
 pause

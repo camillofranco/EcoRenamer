@@ -1,6 +1,6 @@
 {
-    "version": "1.9.1",
-    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.9.1/EcoRenamer_Win_v1.9.1.zip",
-    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.9.1/EcoRenamer_Mac_v1.9.1.zip",
-    "changelog": "v1.9.1\n- 📸 Novo utilitário para comprimir fotos sem renomear arquivos JPG/JPEG.\n- 🗂️ Fotos comprimidas são salvas em pasta separada; os originais permanecem intactos.\n- 🔄 Arquivos PNG/HEIC mantêm o nome base e são convertidos para JPG."
+    "version": "1.9.2",
+    "download_url_win": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.9.2/EcoRenamer_Win_v1.9.2.zip",
+    "download_url_mac": "https://github.com/camillofranco/EcoRenamer/releases/download/v1.9.2/EcoRenamer_Mac_v1.9.2.zip",
+    "changelog": "v1.9.2\n- ♻️ A verificação de atualizações agora informa erros de conexão e oferece um link de download.\n- 🔒 Download com certificado verificado e instalação mais segura no macOS.\n- 📸 Inclui o utilitário de compressão de fotos sem renomear da v1.9.1."
 }
