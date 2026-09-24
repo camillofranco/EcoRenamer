@@ -22,6 +22,7 @@ O **EcoRenamer Pro** é um assistente de produtividade empresarial desenvolvido 
 - **Excel para PDF**: Gera relatórios PDF profissionais a partir de tabelas Excel.
 - **PDF para Excel**: Extrai tabelas integradas de PDFs para análise de dados.
 - **Fotos para PDF**: Cria álbuns PDF de alta qualidade a partir de fotos (JPG/PNG/HEIF), respeitando a rotação correta da câmera.
+- **Comprimir Fotos**: Selecione uma pasta na aba **Utilitários** e clique em **Comprimir sem renomear**. O app cria `Fotos_Comprimidas` (ou uma pasta numerada, se ela já existir), reduz as fotos para até 800×800 pixels e usa a mesma qualidade JPEG 60 do renomeador. Os originais ficam intactos. Arquivos JPG/JPEG conservam o nome completo; PNG/HEIC conservam o nome base e passam a ter extensão `.JPG`. Se dois arquivos produziriam o mesmo nome, o app avisa antes de começar.
 
 ## 🚀 Instalação e Execução
 
